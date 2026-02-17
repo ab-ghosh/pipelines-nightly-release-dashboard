@@ -239,24 +239,38 @@
 
     .image-bar {
       display: flex;
-      gap: 10px;
-      align-items: center;
-      padding: 10px 22px;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 22px;
       background: rgba(0,0,0,0.15);
       font-size: 12px;
       color: var(--text-dim);
-      flex-wrap: wrap;
       border-bottom: 1px solid var(--border-light);
     }
-    .image-bar .label { font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .image-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .image-bar .label {
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      min-width: 32px;
+      flex-shrink: 0;
+    }
+    .image-bar .label.old { color: var(--text-dim); }
+    .image-bar .label.new { color: var(--green); }
     .image-bar .digest {
       color: var(--text-muted);
       background: var(--bg);
-      padding: 2px 8px;
+      padding: 3px 10px;
       border-radius: 4px;
       font-size: 11px;
       font-family: 'SF Mono','Fira Code', monospace;
       word-break: break-all;
+      line-height: 1.5;
     }
 
     /* Clusters */
@@ -571,10 +585,15 @@
       {% if release.new_index_image %}
       <div class="image-bar">
       {% if release.old_index_image %}
-      <span class="label">Old</span><span class="digest">{{ release.old_index_image }}</span>
-      <span style="color:var(--text-dim)">&#x2192;</span>
+      <div class="image-row">
+        <span class="label old">Old</span>
+        <span class="digest">{{ release.old_index_image }}</span>
+      </div>
       {% endif %}
-      <span class="label">New</span><span class="digest">{{ release.new_index_image }}</span>
+      <div class="image-row">
+        <span class="label new">New</span>
+        <span class="digest">{{ release.new_index_image }}</span>
+      </div>
       </div>
       {% endif %}
 
