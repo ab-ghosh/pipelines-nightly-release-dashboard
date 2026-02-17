@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenShift Pipelines - Nightly Release Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1c2128;
+      --surface-hover: #21262d;
+      --border: #30363d;
+      --border-light: #21262d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --text-dim: #656d76;
+      --accent: #ee0000;
+      --accent-soft: rgba(238, 0, 0, 0.1);
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --purple: #bc8cff;
+      --orange: #db6d28;
+      --pink: #f778ba;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    .header-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 16px; color: white;
+    }
+    .logo-text { font-size: 17px; font-weight: 600; }
+    .logo-text span { color: var(--text-muted); font-weight: 400; }
+    .updated { font-size: 12px; color: var(--text-dim); }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 28px 24px 48px; }
+
+    /* Hero Cards */
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .hero-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 24px 28px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .hero-card.prod::before { background: linear-gradient(90deg, var(--green), transparent); }
+    .hero-card.dev::before { background: linear-gradient(90deg, var(--blue), transparent); }
+    .hero-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .hero-version {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      font-variant-numeric: tabular-nums;
+    }
+    .hero-version.prod { color: var(--green); }
+    .hero-version.dev { color: var(--blue); }
+    .hero-meta {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .hero-meta a { color: var(--blue); text-decoration: none; font-weight: 500; }
+    .hero-meta a:hover { text-decoration: underline; }
+
+    /* Filter */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .filter-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .filter-btn {
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-weight: 500;
+    }
+    .filter-btn:hover { border-color: var(--text-dim); color: var(--text); background: var(--surface); }
+    .filter-btn.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Release Cards */
+    .release-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      margin-bottom: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .release-card:hover { border-color: #3d444d; }
+    .release-card.expanded {
+      border-color: #3d444d;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+
+    .release-header {
+      padding: 14px 22px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .release-header:hover { background: var(--surface-hover); }
+
+    .release-info { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
+    .release-ver {
+      font-size: 17px;
+      font-weight: 700;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .release-title {
+      font-size: 13px;
+      color: var(--text-dim);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .release-badges { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      letter-spacing: 0.2px;
+    }
+    .badge-prod { background: rgba(63,185,80,0.1); color: var(--green); }
+    .badge-dev { background: rgba(88,166,255,0.1); color: var(--blue); }
+    .badge-staging { background: rgba(188,140,255,0.1); color: var(--purple); }
+    .badge-unknown { background: rgba(139,148,158,0.1); color: var(--text-muted); }
+    .badge-components { background: rgba(210,153,34,0.1); color: var(--yellow); }
+    .badge-date { font-size: 12px; color: var(--text-dim); font-weight: 400; white-space: nowrap; }
+    .chevron {
+      color: var(--text-dim);
+      transition: transform 0.25s ease;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .release-card.expanded .chevron { transform: rotate(90deg); }
+
+    /* Release Details */
+    .release-details { display: none; border-top: 1px solid var(--border); }
+    .release-card.expanded .release-details { display: block; }
+
+    .details-meta {
+      display: flex;
+      gap: 20px;
+      padding: 14px 22px;
+      background: var(--surface-2);
+      font-size: 13px;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .details-meta a { color: var(--blue); text-decoration: none; font-weight: 500; }
+    .details-meta a:hover { text-decoration: underline; }
+    .meta-pair { display: flex; gap: 6px; align-items: center; }
+    .meta-key { color: var(--text-dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+
+    .image-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 22px;
+      background: rgba(0,0,0,0.15);
+      font-size: 12px;
+      color: var(--text-dim);
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .image-bar .label { font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .image-bar .digest {
+      color: var(--text-muted);
+      background: var(--bg);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: 'SF Mono','Fira Code', monospace;
+      word-break: break-all;
+    }
+
+    /* Clusters */
+    .clusters-bar {
+      padding: 10px 22px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .clusters-label { font-size: 11px; color: var(--text-dim); margin-right: 4px; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 500; }
+    .cluster-tag {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 6px;
+      background: rgba(88,166,255,0.06);
+      border: 1px solid rgba(88,166,255,0.12);
+      color: var(--blue);
+      font-family: 'SF Mono','Fira Code', monospace;
+    }
+
+    /* Component sections */
+    .components-wrapper {
+      padding: 6px 0;
+    }
+    .component-section {
+      margin: 0;
+    }
+    .component-section + .component-section {
+      border-top: 1px solid var(--border-light);
+    }
+
+    .component-header-inner {
+      padding: 12px 22px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .component-header-inner:hover { background: var(--surface-hover); }
+
+    .comp-name {
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .comp-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800; flex-shrink: 0;
+      letter-spacing: -0.5px;
+    }
+    .comp-sub-count {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-weight: 400;
+      margin-left: 4px;
+    }
+    .comp-chevron {
+      color: var(--text-dim);
+      transition: transform 0.25s ease;
+      font-size: 13px;
+    }
+    .component-section.comp-expanded .comp-chevron { transform: rotate(90deg); }
+
+    .comp-body {
+      display: none;
+      padding: 0 22px 20px 66px;
+    }
+    .component-section.comp-expanded .comp-body { display: block; }
+
+    /* Subsection headings */
+    .subsection {
+      margin-bottom: 16px;
+    }
+    .subsection:last-child { margin-bottom: 0; }
+    .subsection-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .subsection-icon {
+      width: 20px; height: 20px;
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .subsection-icon.breaking { background: rgba(255,123,114,0.12); color: #ff7b72; }
+    .subsection-icon.features { background: rgba(63,185,80,0.12); color: var(--green); }
+    .subsection-icon.bugfix { background: rgba(88,166,255,0.12); color: var(--blue); }
+    .subsection-icon.docs { background: rgba(188,140,255,0.12); color: var(--purple); }
+    .subsection-icon.other { background: rgba(139,148,158,0.12); color: var(--text-muted); }
+    .subsection-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .subsection-title.breaking { color: #ff7b72; }
+    .subsection-title.features { color: var(--green); }
+    .subsection-title.bugfix { color: var(--blue); }
+    .subsection-title.docs { color: var(--purple); }
+    .subsection-title.other { color: var(--text-muted); }
+
+    /* Markdown rendered content */
+    .md-content {
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.75;
+    }
+    .md-content p {
+      margin-bottom: 8px;
+    }
+    .md-content p:last-child { margin-bottom: 0; }
+    .md-content ul.md-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .md-content ul.md-list li {
+      position: relative;
+      padding: 8px 0 8px 20px;
+      border-bottom: 1px solid rgba(48,54,61,0.5);
+      font-size: 13.5px;
+      line-height: 1.65;
+    }
+    .md-content ul.md-list li:last-child {
+      border-bottom: none;
+    }
+    .md-content ul.md-list li::before {
+      content: '';
+      position: absolute;
+      left: 2px;
+      top: 16px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+    .md-content strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .md-content code {
+      background: rgba(110,118,129,0.15);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: 'SF Mono','Fira Code', monospace;
+      color: var(--text-muted);
+    }
+    .md-content a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+    .md-content a:hover { text-decoration: underline; }
+
+    .no-notes {
+      padding: 24px 22px;
+      font-size: 13px;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 32px 24px 24px;
+      font-size: 12px;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border-light);
+    }
+    .footer a { color: var(--blue); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+
+    /* Color palette for component icons */
+    .c0 { background: rgba(88,166,255,0.15); color: #58a6ff; }
+    .c1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+    .c2 { background: rgba(210,153,34,0.15); color: #d29922; }
+    .c3 { background: rgba(219,109,40,0.15); color: #db6d28; }
+    .c4 { background: rgba(188,140,255,0.15); color: #bc8cff; }
+    .c5 { background: rgba(255,123,114,0.15); color: #ff7b72; }
+    .c6 { background: rgba(121,192,255,0.15); color: #79c0ff; }
+    .c7 { background: rgba(214,171,1,0.15); color: #d6ab01; }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+      .hero-grid { grid-template-columns: 1fr; }
+      .hero-version { font-size: 28px; }
+      .release-info { flex-direction: column; align-items: flex-start; gap: 4px; }
+      .release-badges { flex-wrap: wrap; }
+      .comp-body { padding-left: 22px; }
+      .details-meta { flex-direction: column; gap: 8px; }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">P</div>
+      <div class="logo-text">OpenShift Pipelines <span>Release Notes</span></div>
+    </div>
+    <div class="updated">Updated {{ last_updated[:10] }}</div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- Hero: Current Versions -->
+  <div class="hero-grid">
+    <div class="hero-card prod">
+      <div class="hero-label">Production</div>
+      {% if latest_prod %}
+      <div class="hero-version prod">{{ latest_prod.version or 'N/A' }}</div>
+      <div class="hero-meta">
+        <span>Deployed {{ latest_prod.merged_at[:10] if latest_prod.merged_at else '?' }}</span>
+        <a href="{{ latest_prod.pr_url }}" target="_blank" rel="noopener">PR #{{ latest_prod.pr_number }}</a>
+        {% if latest_prod.clusters %}
+        <span>{{ latest_prod.clusters | length }} clusters</span>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="hero-version prod" style="color:var(--text-dim)">No data</div>
+      {% endif %}
+    </div>
+    <div class="hero-card dev">
+      <div class="hero-label">Dev / Staging</div>
+      {% if latest_dev %}
+      <div class="hero-version dev">{{ latest_dev.version or 'N/A' }}</div>
+      <div class="hero-meta">
+        <span>Deployed {{ latest_dev.merged_at[:10] if latest_dev.merged_at else '?' }}</span>
+        <a href="{{ latest_dev.pr_url }}" target="_blank" rel="noopener">PR #{{ latest_dev.pr_number }}</a>
+      </div>
+      {% else %}
+      <div class="hero-version dev" style="color:var(--text-dim)">No data</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Filter -->
+  <div class="filter-bar">
+    <span class="filter-label">Filter:</span>
+    <button class="filter-btn active" onclick="filterReleases('all')">All ({{ total_releases }})</button>
+    <button class="filter-btn" onclick="filterReleases('production')">Production</button>
+    <button class="filter-btn" onclick="filterReleases('dev/staging')">Dev/Staging</button>
+  </div>
+
+  <!-- Release Timeline -->
+  {% for release in releases %}
+  <div class="release-card" data-env="{{ release.environment }}">
+    <div class="release-header" onclick="this.parentElement.classList.toggle('expanded')">
+      <div class="release-info">
+        <span class="release-ver">{{ release.version or '(no version)' }}</span>
+        <span class="release-title">{{ release.title }}</span>
+      </div>
+      <div class="release-badges">
+        {% if release.environment == 'production' %}
+        <span class="badge badge-prod">production</span>
+        {% elif release.environment in ('dev/staging', 'development', 'staging') %}
+        <span class="badge badge-dev">{{ release.environment }}</span>
+        {% else %}
+        <span class="badge badge-unknown">{{ release.environment }}</span>
+        {% endif %}
+        {% if release.component_count > 0 %}
+        <span class="badge badge-components">{{ release.component_count }} components</span>
+        {% endif %}
+        <span class="badge-date">{{ release.merged_at[:10] if release.merged_at else '' }}</span>
+        <span class="chevron">&#x276F;</span>
+      </div>
+    </div>
+
+    <div class="release-details">
+      <!-- Meta bar -->
+      <div class="details-meta">
+        <div class="meta-pair">
+          <span class="meta-key">PR</span>
+          <a href="{{ release.pr_url }}" target="_blank" rel="noopener">#{{ release.pr_number }}</a>
+        </div>
+        <div class="meta-pair">
+          <span class="meta-key">Author</span>
+          <span>{{ release.author }}</span>
+        </div>
+        <div class="meta-pair">
+          <span class="meta-key">Merged</span>
+          <span>{{ release.merged_at[:10] if release.merged_at else '?' }}</span>
+        </div>
+        {% if release.promoted_from_pr %}
+        <div class="meta-pair">
+          <span class="meta-key">Promoted from</span>
+          <a href="https://github.com/redhat-appstudio/infra-deployments/pull/{{ release.promoted_from_pr }}" target="_blank" rel="noopener">PR #{{ release.promoted_from_pr }}</a>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Index image -->
+      {% if release.new_index_image %}
+      <div class="image-bar">
+        {% if release.old_index_image %}
+        <span class="label">Old</span><span class="digest">{{ release.old_index_image[-20:] }}</span>
+        <span style="color:var(--text-dim)">&#x2192;</span>
+        {% endif %}
+        <span class="label">New</span><span class="digest">{{ release.new_index_image[-20:] }}</span>
+      </div>
+      {% endif %}
+
+      <!-- Clusters -->
+      {% if release.clusters %}
+      <div class="clusters-bar">
+        <span class="clusters-label">Clusters</span>
+        {% for cluster in release.clusters %}
+        <span class="cluster-tag">{{ cluster }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Component release notes -->
+      {% if release.release_notes and release.release_notes.components %}
+      <div class="components-wrapper">
+        {% for comp in release.release_notes.components %}
+        <div class="component-section comp-expanded">
+          <div class="component-header-inner" onclick="this.parentElement.classList.toggle('comp-expanded')">
+            <div class="comp-name">
+              <div class="comp-icon c{{ loop.index0 % 8 }}">{{ comp.name[:2] | upper }}</div>
+              <span>{{ comp.name }}</span>
+              {% if comp.subsections %}
+              <span class="comp-sub-count">{{ comp.subsections | length }} sections</span>
+              {% endif %}
+            </div>
+            <span class="comp-chevron">&#x276F;</span>
+          </div>
+          <div class="comp-body">
+            {% if comp.subsections_html %}
+              {% for sub_name, sub_html in comp.subsections_html.items() %}
+              <div class="subsection">
+                <div class="subsection-header">
+                  {% set sub_lower = sub_name | lower %}
+                  {% if 'breaking' in sub_lower %}
+                  <div class="subsection-icon breaking">!</div>
+                  <div class="subsection-title breaking">{{ sub_name }}</div>
+                  {% elif 'feature' in sub_lower or 'new' in sub_lower %}
+                  <div class="subsection-icon features">+</div>
+                  <div class="subsection-title features">{{ sub_name }}</div>
+                  {% elif 'fix' in sub_lower or 'bug' in sub_lower %}
+                  <div class="subsection-icon bugfix">&#x2714;</div>
+                  <div class="subsection-title bugfix">{{ sub_name }}</div>
+                  {% elif 'doc' in sub_lower %}
+                  <div class="subsection-icon docs">&#x270E;</div>
+                  <div class="subsection-title docs">{{ sub_name }}</div>
+                  {% else %}
+                  <div class="subsection-icon other">&#x2022;</div>
+                  <div class="subsection-title other">{{ sub_name }}</div>
+                  {% endif %}
+                </div>
+                <div class="md-content">{{ sub_html | safe }}</div>
+              </div>
+              {% endfor %}
+            {% elif comp.raw_html %}
+              <div class="md-content">{{ comp.raw_html | safe }}</div>
+            {% else %}
+              <div class="md-content"><p style="color:var(--text-dim)">No details available.</p></div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+        <div class="no-notes">No structured release notes available for this upgrade.</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+</main>
+
+<footer class="footer">
+  Generated by
+  <a href="https://github.com/ab-ghosh/pipelines-nightly-release-dashboard" target="_blank" rel="noopener">pipelines-nightly-release-dashboard</a>
+  &middot; Data from
+  <a href="https://github.com/redhat-appstudio/infra-deployments" target="_blank" rel="noopener">infra-deployments</a>
+</footer>
+
+<script>
+function filterReleases(env) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.querySelectorAll('.release-card').forEach(card => {
+    if (env === 'all') {
+      card.style.display = '';
+    } else {
+      const e = card.dataset.env;
+      card.style.display = e.includes(env) || env.includes(e) ? '' : 'none';
+    }
+  });
+}
+</script>
+</body>
+</html>

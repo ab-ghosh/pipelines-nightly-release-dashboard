@@ -1,0 +1,7 @@
+[project]
+name = "pipelines-nightly-release-dashboard"
+version = "0.1.0"
+description = "OpenShift Pipelines Nightly Release Dashboard - scrapes upgrade PRs and generates a static site"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["jinja2"]
