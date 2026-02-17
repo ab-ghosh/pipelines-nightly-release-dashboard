@@ -570,11 +570,11 @@
       <!-- Index image -->
       {% if release.new_index_image %}
       <div class="image-bar">
-        {% if release.old_index_image %}
-        <span class="label">Old</span><span class="digest">{{ release.old_index_image[-20:] }}</span>
-        <span style="color:var(--text-dim)">&#x2192;</span>
-        {% endif %}
-        <span class="label">New</span><span class="digest">{{ release.new_index_image[-20:] }}</span>
+      {% if release.old_index_image %}
+      <span class="label">Old</span><span class="digest">{{ release.old_index_image }}</span>
+      <span style="color:var(--text-dim)">&#x2192;</span>
+      {% endif %}
+      <span class="label">New</span><span class="digest">{{ release.new_index_image }}</span>
       </div>
       {% endif %}
 
