@@ -113,13 +113,17 @@ def github_api(endpoint: str, token: str | None = None, params: dict | None = No
         raise
 
 
-def search_upgrade_prs(token: str | None, limit: int = 30) -> list[dict]:
-    """Search for merged pipeline upgrade PRs in infra-deployments."""
+def search_upgrade_prs(token: str | None, limit: int = 30, state: str = "merged") -> list[dict]:
+    """Search for pipeline upgrade PRs in infra-deployments.
+
+    state: "merged" for deployed releases, "open" for upcoming releases.
+    """
     all_prs = {}
+    is_filter = f"is:{state}" if state == "open" else "is:merged"
 
     for query in SEARCH_QUERIES:
-        search_q = f'repo:{INFRA_REPO} is:pr is:merged "{query}"'
-        logger.info(f"Searching: {query}")
+        search_q = f'repo:{INFRA_REPO} is:pr {is_filter} "{query}"'
+        logger.info(f"Searching ({state}): {query}")
         try:
             results = github_api(
                 "search/issues",
@@ -131,7 +135,8 @@ def search_upgrade_prs(token: str | None, limit: int = 30) -> list[dict]:
         except HTTPError:
             logger.warning(f"Search failed for query: {query}")
 
-    sorted_prs = sorted(all_prs.values(), key=lambda p: p.get("closed_at", ""), reverse=True)
+    sort_key = "created_at" if state == "open" else "closed_at"
+    sorted_prs = sorted(all_prs.values(), key=lambda p: p.get(sort_key, ""), reverse=True)
     return sorted_prs[:limit]
 
 
@@ -278,10 +283,33 @@ def parse_release_notes(body: str) -> dict:
     }
 
 
+def scrape_upcoming(token: str | None) -> list[dict]:
+    """Scrape open (unmerged) upgrade PRs to find upcoming releases."""
+    logger.info("Searching for open upgrade PRs...")
+    prs = search_upgrade_prs(token, limit=10, state="open")
+    logger.info(f"Found {len(prs)} open PRs")
+
+    upcoming = []
+    for pr_item in prs:
+        pr_number = pr_item["number"]
+        title = pr_item.get("title", "")
+        environment = extract_environment(title)
+        version = extract_version(title)
+        upcoming.append({
+            "pr_number": pr_number,
+            "pr_url": pr_item.get("html_url", f"https://github.com/{INFRA_REPO}/pull/{pr_number}"),
+            "title": title,
+            "version": version,
+            "environment": environment,
+            "created_at": pr_item.get("created_at", ""),
+        })
+    return upcoming
+
+
 def scrape_releases(token: str | None, limit: int = 30) -> list[dict]:
-    """Scrape and structure release data from PRs."""
-    logger.info(f"Searching for up to {limit} upgrade PRs...")
-    prs = search_upgrade_prs(token, limit=limit)
+    """Scrape and structure release data from merged PRs."""
+    logger.info(f"Searching for up to {limit} merged upgrade PRs...")
+    prs = search_upgrade_prs(token, limit=limit, state="merged")
     logger.info(f"Found {len(prs)} PRs to process")
 
     releases = []
@@ -328,18 +356,28 @@ def scrape_releases(token: str | None, limit: int = 30) -> list[dict]:
     return releases
 
 
-def generate_dashboard(releases: list[dict], output_dir: Path):
+def generate_dashboard(releases: list[dict], upcoming: list[dict], output_dir: Path):
     """Generate the static HTML dashboard from releases data."""
     template_dir = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(str(template_dir)), autoescape=True)
     template = env.get_template("index.html")
 
     latest_prod = next(
-        (r for r in releases if r["environment"] == "production" and r["version"]),
+        (r for r in releases if r["environment"] == "production"),
         None,
     )
-    latest_dev = next(
-        (r for r in releases if r["environment"] in ("dev/staging", "development", "staging") and r["version"]),
+    latest_staging = next(
+        (r for r in releases if r["environment"] in ("dev/staging", "development", "staging")),
+        None,
+    )
+
+    DEV_ENVS = ("dev/staging", "development", "staging")
+    upcoming_staging = next(
+        (u for u in upcoming if u["environment"] in DEV_ENVS),
+        None,
+    )
+    upcoming_prod = next(
+        (u for u in upcoming if u["environment"] == "production"),
         None,
     )
 
@@ -348,7 +386,9 @@ def generate_dashboard(releases: list[dict], output_dir: Path):
     html = template.render(
         releases=releases,
         latest_prod=latest_prod,
-        latest_dev=latest_dev,
+        latest_staging=latest_staging,
+        upcoming_staging=upcoming_staging,
+        upcoming_prod=upcoming_prod,
         last_updated=now,
         total_releases=len(releases),
     )
@@ -361,6 +401,7 @@ def generate_dashboard(releases: list[dict], output_dir: Path):
     data = {
         "last_updated": now,
         "releases": releases,
+        "upcoming": upcoming,
     }
     (output_dir / "releases.json").write_text(json.dumps(data, indent=2))
     logger.info(f"Written {output_dir / 'releases.json'}")
@@ -385,13 +426,14 @@ def main():
 
     output_dir = Path(args.output)
     releases = scrape_releases(token, limit=args.limit)
+    upcoming = scrape_upcoming(token)
 
     if not releases:
         logger.error("No releases found. Check your search queries and token.")
         sys.exit(1)
 
-    logger.info(f"\nCollected {len(releases)} releases")
-    generate_dashboard(releases, output_dir)
+    logger.info(f"\nCollected {len(releases)} releases, {len(upcoming)} upcoming")
+    generate_dashboard(releases, upcoming, output_dir)
     logger.info("Done!")
 
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpenShift Pipelines - Nightly Release Dashboard</title>
+  <title>OpenShift Pipelines - Nightly Release Dashboard (Konflux)</title>
   <style>
     :root {
       --bg: #0d1117;
@@ -89,8 +89,8 @@
       top: 0; left: 0; right: 0;
       height: 3px;
     }
+    .hero-card.staging::before { background: linear-gradient(90deg, var(--blue), transparent); }
     .hero-card.prod::before { background: linear-gradient(90deg, var(--green), transparent); }
-    .hero-card.dev::before { background: linear-gradient(90deg, var(--blue), transparent); }
     .hero-label {
       font-size: 11px;
       text-transform: uppercase;
@@ -106,7 +106,7 @@
       font-variant-numeric: tabular-nums;
     }
     .hero-version.prod { color: var(--green); }
-    .hero-version.dev { color: var(--blue); }
+    .hero-version.staging { color: var(--blue); }
     .hero-meta {
       margin-top: 10px;
       font-size: 13px;
@@ -118,6 +118,41 @@
     }
     .hero-meta a { color: var(--blue); text-decoration: none; font-weight: 500; }
     .hero-meta a:hover { text-decoration: underline; }
+    .hero-upcoming {
+      margin-top: 14px;
+      padding: 10px 14px;
+      background: rgba(210,153,34,0.08);
+      border: 1px solid rgba(210,153,34,0.2);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+    .hero-upcoming .upcoming-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .hero-upcoming .upcoming-text {
+      color: var(--yellow);
+      font-weight: 600;
+    }
+    .hero-upcoming .upcoming-title {
+      color: var(--text-muted);
+      font-weight: 400;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+    .hero-upcoming a { color: var(--yellow); text-decoration: none; font-weight: 600; }
+    .hero-upcoming a:hover { text-decoration: underline; }
+    .hero-flow-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-dim);
+      font-size: 20px;
+      align-self: center;
+    }
 
     /* Filter */
     .filter-bar {
@@ -487,7 +522,7 @@
   <div class="header-inner">
     <div class="logo">
       <div class="logo-icon">P</div>
-      <div class="logo-text">OpenShift Pipelines <span>Release Notes</span></div>
+      <div class="logo-text">OpenShift Pipelines <span>Nightly Release Dashboard</span></div>
     </div>
     <div class="updated">Updated {{ last_updated[:10] }}</div>
   </div>
@@ -495,12 +530,33 @@
 
 <main class="container">
 
-  <!-- Hero: Current Versions -->
+  <!-- Hero: Staging → Production Pipeline -->
   <div class="hero-grid">
+    <div class="hero-card staging">
+      <div class="hero-label">Staging</div>
+      {% if latest_staging %}
+      <div class="hero-version staging">{{ latest_staging.version or latest_staging.title }}</div>
+      <div class="hero-meta">
+        <span>Deployed {{ latest_staging.merged_at[:10] if latest_staging.merged_at else '?' }}</span>
+        <a href="{{ latest_staging.pr_url }}" target="_blank" rel="noopener">PR #{{ latest_staging.pr_number }}</a>
+      </div>
+      {% else %}
+      <div class="hero-version staging" style="color:var(--text-dim)">No data</div>
+      {% endif %}
+      {% if upcoming_staging %}
+      <div class="hero-upcoming">
+        <span class="upcoming-icon">&#x1F680;</span>
+        <div>
+          <div class="upcoming-text">Releasing soon &mdash; <a href="{{ upcoming_staging.pr_url }}" target="_blank" rel="noopener">PR #{{ upcoming_staging.pr_number }}</a></div>
+          <div class="upcoming-title">{{ upcoming_staging.title }}</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
     <div class="hero-card prod">
       <div class="hero-label">Production</div>
       {% if latest_prod %}
-      <div class="hero-version prod">{{ latest_prod.version or 'N/A' }}</div>
+      <div class="hero-version prod">{{ latest_prod.version or latest_prod.title }}</div>
       <div class="hero-meta">
         <span>Deployed {{ latest_prod.merged_at[:10] if latest_prod.merged_at else '?' }}</span>
         <a href="{{ latest_prod.pr_url }}" target="_blank" rel="noopener">PR #{{ latest_prod.pr_number }}</a>
@@ -511,17 +567,14 @@
       {% else %}
       <div class="hero-version prod" style="color:var(--text-dim)">No data</div>
       {% endif %}
-    </div>
-    <div class="hero-card dev">
-      <div class="hero-label">Dev / Staging</div>
-      {% if latest_dev %}
-      <div class="hero-version dev">{{ latest_dev.version or 'N/A' }}</div>
-      <div class="hero-meta">
-        <span>Deployed {{ latest_dev.merged_at[:10] if latest_dev.merged_at else '?' }}</span>
-        <a href="{{ latest_dev.pr_url }}" target="_blank" rel="noopener">PR #{{ latest_dev.pr_number }}</a>
+      {% if upcoming_prod %}
+      <div class="hero-upcoming">
+        <span class="upcoming-icon">&#x1F680;</span>
+        <div>
+          <div class="upcoming-text">Releasing soon &mdash; <a href="{{ upcoming_prod.pr_url }}" target="_blank" rel="noopener">PR #{{ upcoming_prod.pr_number }}</a></div>
+          <div class="upcoming-title">{{ upcoming_prod.title }}</div>
+        </div>
       </div>
-      {% else %}
-      <div class="hero-version dev" style="color:var(--text-dim)">No data</div>
       {% endif %}
     </div>
   </div>
