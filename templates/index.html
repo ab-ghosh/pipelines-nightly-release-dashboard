@@ -89,8 +89,8 @@
       top: 0; left: 0; right: 0;
       height: 3px;
     }
-    .hero-card.staging::before { background: linear-gradient(90deg, var(--blue), transparent); }
     .hero-card.prod::before { background: linear-gradient(90deg, var(--green), transparent); }
+    .hero-card.dev::before { background: linear-gradient(90deg, var(--blue), transparent); }
     .hero-label {
       font-size: 11px;
       text-transform: uppercase;
@@ -106,7 +106,7 @@
       font-variant-numeric: tabular-nums;
     }
     .hero-version.prod { color: var(--green); }
-    .hero-version.staging { color: var(--blue); }
+    .hero-version.dev { color: var(--blue); }
     .hero-meta {
       margin-top: 10px;
       font-size: 13px;
@@ -118,40 +118,46 @@
     }
     .hero-meta a { color: var(--blue); text-decoration: none; font-weight: 500; }
     .hero-meta a:hover { text-decoration: underline; }
-    .hero-upcoming {
-      margin-top: 14px;
-      padding: 10px 14px;
-      background: rgba(210,153,34,0.08);
-      border: 1px solid rgba(210,153,34,0.2);
-      border-radius: var(--radius);
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    /* Next Release Section */
+    .next-release-section {
+      margin-bottom: 32px;
+    }
+    .section-heading {
       font-size: 13px;
-    }
-    .hero-upcoming .upcoming-icon {
-      font-size: 16px;
-      flex-shrink: 0;
-    }
-    .hero-upcoming .upcoming-text {
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
       color: var(--yellow);
-      font-weight: 600;
-    }
-    .hero-upcoming .upcoming-title {
-      color: var(--text-muted);
-      font-weight: 400;
-      font-size: 12px;
-      margin-top: 2px;
-    }
-    .hero-upcoming a { color: var(--yellow); text-decoration: none; font-weight: 600; }
-    .hero-upcoming a:hover { text-decoration: underline; }
-    .hero-flow-arrow {
+      margin-bottom: 14px;
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 8px;
+    }
+    .section-heading .heading-icon {
+      font-size: 16px;
+    }
+    .next-release-card {
+      background: var(--surface);
+      border: 1px solid rgba(210,153,34,0.25);
+      border-radius: var(--radius-lg);
+      margin-bottom: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .next-release-card:hover { border-color: rgba(210,153,34,0.4); }
+    .next-release-card.expanded {
+      border-color: rgba(210,153,34,0.4);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+    .badge-open { background: rgba(210,153,34,0.12); color: var(--yellow); }
+    .no-upcoming {
+      padding: 18px 22px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      font-size: 14px;
       color: var(--text-dim);
-      font-size: 20px;
-      align-self: center;
+      text-align: center;
     }
 
     /* Filter */
@@ -530,33 +536,12 @@
 
 <main class="container">
 
-  <!-- Hero: Staging → Production Pipeline -->
+  <!-- Hero: Current Versions -->
   <div class="hero-grid">
-    <div class="hero-card staging">
-      <div class="hero-label">Staging</div>
-      {% if latest_staging %}
-      <div class="hero-version staging">{{ latest_staging.version or latest_staging.title }}</div>
-      <div class="hero-meta">
-        <span>Deployed {{ latest_staging.merged_at[:10] if latest_staging.merged_at else '?' }}</span>
-        <a href="{{ latest_staging.pr_url }}" target="_blank" rel="noopener">PR #{{ latest_staging.pr_number }}</a>
-      </div>
-      {% else %}
-      <div class="hero-version staging" style="color:var(--text-dim)">No data</div>
-      {% endif %}
-      {% if upcoming_staging %}
-      <div class="hero-upcoming">
-        <span class="upcoming-icon">&#x1F680;</span>
-        <div>
-          <div class="upcoming-text">Releasing soon &mdash; <a href="{{ upcoming_staging.pr_url }}" target="_blank" rel="noopener">PR #{{ upcoming_staging.pr_number }}</a></div>
-          <div class="upcoming-title">{{ upcoming_staging.title }}</div>
-        </div>
-      </div>
-      {% endif %}
-    </div>
     <div class="hero-card prod">
       <div class="hero-label">Production</div>
       {% if latest_prod %}
-      <div class="hero-version prod">{{ latest_prod.version or latest_prod.title }}</div>
+      <div class="hero-version prod">{{ latest_prod.version or 'N/A' }}</div>
       <div class="hero-meta">
         <span>Deployed {{ latest_prod.merged_at[:10] if latest_prod.merged_at else '?' }}</span>
         <a href="{{ latest_prod.pr_url }}" target="_blank" rel="noopener">PR #{{ latest_prod.pr_number }}</a>
@@ -567,16 +552,121 @@
       {% else %}
       <div class="hero-version prod" style="color:var(--text-dim)">No data</div>
       {% endif %}
-      {% if upcoming_prod %}
-      <div class="hero-upcoming">
-        <span class="upcoming-icon">&#x1F680;</span>
-        <div>
-          <div class="upcoming-text">Releasing soon &mdash; <a href="{{ upcoming_prod.pr_url }}" target="_blank" rel="noopener">PR #{{ upcoming_prod.pr_number }}</a></div>
-          <div class="upcoming-title">{{ upcoming_prod.title }}</div>
-        </div>
+    </div>
+    <div class="hero-card dev">
+      <div class="hero-label">Dev / Staging</div>
+      {% if latest_dev %}
+      <div class="hero-version dev">{{ latest_dev.version or 'N/A' }}</div>
+      <div class="hero-meta">
+        <span>Deployed {{ latest_dev.merged_at[:10] if latest_dev.merged_at else '?' }}</span>
+        <a href="{{ latest_dev.pr_url }}" target="_blank" rel="noopener">PR #{{ latest_dev.pr_number }}</a>
       </div>
+      {% else %}
+      <div class="hero-version dev" style="color:var(--text-dim)">No data</div>
       {% endif %}
     </div>
+  </div>
+
+  <!-- Next Release -->
+  <div class="next-release-section">
+    <div class="section-heading">
+      <span class="heading-icon">&#x1F680;</span> Next Release
+    </div>
+    {% if upcoming %}
+    {% for up in upcoming %}
+    <div class="next-release-card" data-env="{{ up.environment }}">
+      <div class="release-header" onclick="this.parentElement.classList.toggle('expanded')">
+        <div class="release-info">
+          <span class="release-ver">{{ up.version or '(pending)' }}</span>
+          <span class="release-title">{{ up.title }}</span>
+        </div>
+        <div class="release-badges">
+          {% if up.environment == 'production' %}
+          <span class="badge badge-prod">production</span>
+          {% elif up.environment in ('dev/staging', 'development', 'staging') %}
+          <span class="badge badge-dev">{{ up.environment }}</span>
+          {% else %}
+          <span class="badge badge-unknown">{{ up.environment }}</span>
+          {% endif %}
+          <span class="badge badge-open">PR open</span>
+          {% if up.component_count > 0 %}
+          <span class="badge badge-components">{{ up.component_count }} components</span>
+          {% endif %}
+          <span class="badge-date">{{ up.created_at[:10] if up.created_at else '' }}</span>
+          <span class="chevron">&#x276F;</span>
+        </div>
+      </div>
+      <div class="release-details">
+        <div class="details-meta">
+          <div class="meta-pair">
+            <span class="meta-key">PR</span>
+            <a href="{{ up.pr_url }}" target="_blank" rel="noopener">#{{ up.pr_number }}</a>
+          </div>
+          <div class="meta-pair">
+            <span class="meta-key">Author</span>
+            <span>{{ up.author }}</span>
+          </div>
+          <div class="meta-pair">
+            <span class="meta-key">Created</span>
+            <span>{{ up.created_at[:10] if up.created_at else '?' }}</span>
+          </div>
+        </div>
+        {% if up.release_notes and up.release_notes.components %}
+        <div class="components-wrapper">
+          {% for comp in up.release_notes.components %}
+          <div class="component-section comp-expanded">
+            <div class="component-header-inner" onclick="this.parentElement.classList.toggle('comp-expanded')">
+              <div class="comp-name">
+                <div class="comp-icon c{{ loop.index0 % 8 }}">{{ comp.name[:2] | upper }}</div>
+                <span>{{ comp.name }}</span>
+                {% if comp.subsections %}
+                <span class="comp-sub-count">{{ comp.subsections | length }} sections</span>
+                {% endif %}
+              </div>
+              <span class="comp-chevron">&#x276F;</span>
+            </div>
+            <div class="comp-body">
+              {% if comp.subsections_html %}
+                {% for sub_name, sub_html in comp.subsections_html.items() %}
+                <div class="subsection">
+                  <div class="subsection-header">
+                    {% set sub_lower = sub_name | lower %}
+                    {% if 'breaking' in sub_lower %}
+                    <div class="subsection-icon breaking">!</div>
+                    <div class="subsection-title breaking">{{ sub_name }}</div>
+                    {% elif 'feature' in sub_lower or 'new' in sub_lower %}
+                    <div class="subsection-icon features">+</div>
+                    <div class="subsection-title features">{{ sub_name }}</div>
+                    {% elif 'fix' in sub_lower or 'bug' in sub_lower %}
+                    <div class="subsection-icon bugfix">&#x2714;</div>
+                    <div class="subsection-title bugfix">{{ sub_name }}</div>
+                    {% elif 'doc' in sub_lower %}
+                    <div class="subsection-icon docs">&#x270E;</div>
+                    <div class="subsection-title docs">{{ sub_name }}</div>
+                    {% else %}
+                    <div class="subsection-icon other">&#x2022;</div>
+                    <div class="subsection-title other">{{ sub_name }}</div>
+                    {% endif %}
+                  </div>
+                  <div class="md-content">{{ sub_html | safe }}</div>
+                </div>
+                {% endfor %}
+              {% elif comp.raw_html %}
+                <div class="md-content">{{ comp.raw_html | safe }}</div>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+          <div class="no-notes">No structured release notes available yet.</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="no-upcoming">No open upgrade PRs found &mdash; no release currently in progress.</div>
+    {% endif %}
   </div>
 
   <!-- Filter -->

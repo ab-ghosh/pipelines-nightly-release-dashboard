@@ -284,7 +284,7 @@ def parse_release_notes(body: str) -> dict:
 
 
 def scrape_upcoming(token: str | None) -> list[dict]:
-    """Scrape open (unmerged) upgrade PRs to find upcoming releases."""
+    """Scrape open (unmerged) upgrade PRs with full details and release notes."""
     logger.info("Searching for open upgrade PRs...")
     prs = search_upgrade_prs(token, limit=10, state="open")
     logger.info(f"Found {len(prs)} open PRs")
@@ -293,15 +293,28 @@ def scrape_upcoming(token: str | None) -> list[dict]:
     for pr_item in prs:
         pr_number = pr_item["number"]
         title = pr_item.get("title", "")
+        logger.info(f"Processing open PR #{pr_number}: {title}")
+
+        try:
+            pr = get_pr_details(pr_number, token)
+        except HTTPError as e:
+            logger.warning(f"Skipping open PR #{pr_number}: API error {e.code}")
+            continue
+
         environment = extract_environment(title)
         version = extract_version(title)
+        release_notes = parse_release_notes(pr.get("body", ""))
+
         upcoming.append({
             "pr_number": pr_number,
-            "pr_url": pr_item.get("html_url", f"https://github.com/{INFRA_REPO}/pull/{pr_number}"),
+            "pr_url": pr.get("html_url", f"https://github.com/{INFRA_REPO}/pull/{pr_number}"),
             "title": title,
             "version": version,
             "environment": environment,
-            "created_at": pr_item.get("created_at", ""),
+            "created_at": pr.get("created_at", ""),
+            "author": pr.get("user", {}).get("login", ""),
+            "release_notes": release_notes,
+            "component_count": len(release_notes.get("components", [])),
         })
     return upcoming
 
@@ -363,21 +376,11 @@ def generate_dashboard(releases: list[dict], upcoming: list[dict], output_dir: P
     template = env.get_template("index.html")
 
     latest_prod = next(
-        (r for r in releases if r["environment"] == "production"),
+        (r for r in releases if r["environment"] == "production" and r["version"]),
         None,
     )
-    latest_staging = next(
-        (r for r in releases if r["environment"] in ("dev/staging", "development", "staging")),
-        None,
-    )
-
-    DEV_ENVS = ("dev/staging", "development", "staging")
-    upcoming_staging = next(
-        (u for u in upcoming if u["environment"] in DEV_ENVS),
-        None,
-    )
-    upcoming_prod = next(
-        (u for u in upcoming if u["environment"] == "production"),
+    latest_dev = next(
+        (r for r in releases if r["environment"] in ("dev/staging", "development", "staging") and r["version"]),
         None,
     )
 
@@ -386,9 +389,8 @@ def generate_dashboard(releases: list[dict], upcoming: list[dict], output_dir: P
     html = template.render(
         releases=releases,
         latest_prod=latest_prod,
-        latest_staging=latest_staging,
-        upcoming_staging=upcoming_staging,
-        upcoming_prod=upcoming_prod,
+        latest_dev=latest_dev,
+        upcoming=upcoming,
         last_updated=now,
         total_releases=len(releases),
     )
