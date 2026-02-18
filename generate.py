@@ -376,13 +376,23 @@ def generate_dashboard(releases: list[dict], upcoming: list[dict], output_dir: P
     template = env.get_template("index.html")
 
     latest_prod = next(
-        (r for r in releases if r["environment"] == "production" and r["version"]),
+        (r for r in releases if r["environment"] == "production"),
         None,
     )
     latest_dev = next(
-        (r for r in releases if r["environment"] in ("dev/staging", "development", "staging") and r["version"]),
+        (r for r in releases if r["environment"] in ("dev/staging", "development", "staging")),
         None,
     )
+
+    if latest_prod and not latest_prod["version"]:
+        latest_prod["version"] = "unknown"
+    if latest_dev and not latest_dev["version"]:
+        latest_dev["version"] = "unknown"
+
+    if not latest_prod and latest_dev:
+        latest_prod = {**latest_dev, "environment": "production"}
+    elif not latest_dev and latest_prod:
+        latest_dev = {**latest_prod, "environment": "dev/staging"}
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
