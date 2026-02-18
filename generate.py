@@ -202,9 +202,9 @@ def extract_clusters(files: list[dict]) -> list[str]:
     for f in files:
         path = f.get("filename", "")
         parts = path.split("/")
-        if len(parts) >= 4 and parts[0] == "components" and parts[1] == "pipeline-service":
+        if len(parts) >= 5 and parts[0] == "components" and parts[1] == "pipeline-service":
             cluster = parts[3]
-            if cluster != "base":
+            if cluster != "base" and "." not in cluster:
                 clusters.add(cluster)
     return sorted(clusters)
 
