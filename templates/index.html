@@ -255,11 +255,13 @@
       font-size: 14px;
       flex-shrink: 0;
     }
-    .release-card.expanded .chevron { transform: rotate(90deg); }
+    .release-card.expanded .chevron,
+    .next-release-card.expanded .chevron { transform: rotate(90deg); }
 
     /* Release Details */
     .release-details { display: none; border-top: 1px solid var(--border); }
-    .release-card.expanded .release-details { display: block; }
+    .release-card.expanded .release-details,
+    .next-release-card.expanded .release-details { display: block; }
 
     .details-meta {
       display: flex;
