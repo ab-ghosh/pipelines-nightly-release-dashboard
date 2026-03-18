@@ -283,10 +283,45 @@ def parse_release_notes(body: str) -> dict:
     }
 
 
+def list_open_upgrade_prs(token: str | None, limit: int = 10) -> list[dict]:
+    """List recent open PRs via the REST API and filter by title.
+
+    The Search API has an indexing delay of up to several minutes, so newly
+    opened PRs may not appear in search results immediately.  This function
+    uses the list-pulls endpoint (no indexing lag) as a fallback.
+    """
+    query_terms = [q.lower() for q in SEARCH_QUERIES]
+    try:
+        prs = github_api(
+            f"repos/{INFRA_REPO}/pulls",
+            token=token,
+            params={"state": "open", "sort": "created", "direction": "desc", "per_page": limit},
+        )
+    except HTTPError:
+        logger.warning("Failed to list open PRs via REST API")
+        return []
+
+    matched = []
+    for pr in prs:
+        title_lower = pr.get("title", "").lower()
+        if any(term in title_lower for term in query_terms):
+            matched.append(pr)
+    return matched
+
+
 def scrape_upcoming(token: str | None) -> list[dict]:
     """Scrape open (unmerged) upgrade PRs with full details and release notes."""
     logger.info("Searching for open upgrade PRs...")
     prs = search_upgrade_prs(token, limit=10, state="open")
+
+    # Merge in results from the list PRs API to cover the search indexing delay
+    list_prs = list_open_upgrade_prs(token)
+    seen = {p["number"] for p in prs}
+    for pr in list_prs:
+        if pr["number"] not in seen:
+            logger.info(f"Adding PR #{pr['number']} from list API (not yet indexed by search)")
+            prs.append(pr)
+
     logger.info(f"Found {len(prs)} open PRs")
 
     upcoming = []

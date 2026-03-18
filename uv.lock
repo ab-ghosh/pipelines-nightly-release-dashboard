@@ -78,7 +78,7 @@ wheels = [
 ]
 
 [[package]]
-name = "osp-release-notes"
+name = "pipelines-nightly-release-dashboard"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
