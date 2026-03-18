@@ -215,6 +215,37 @@ def extract_promoted_from(body: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def _normalize_bold_headers(text: str) -> str:
+    """Convert **bold** line headers to markdown ## / ### headers.
+
+    Some PRs use **Component Name** and **Features:** instead of
+    ## Component Name and ### Features.  This normalises them so
+    the main parser can handle both formats uniformly.
+    """
+    lines = text.split("\n")
+    out = []
+    # Known subsection keywords (case-insensitive prefix match)
+    sub_keywords = (
+        "features", "bug fix", "bugfix", "breaking", "deprecat",
+        "performance", "docs", "documentation", "other", "release",
+        "misc", "internal", "api change", "improvements", "enhancement",
+    )
+    for line in lines:
+        stripped = line.strip()
+        # Match lines that are exactly **Some Text** or **Some Text:**
+        m = re.match(r"^\*\*(.+?):?\*\*:?\s*$", stripped)
+        if m:
+            title = m.group(1).strip()
+            title_lower = title.lower()
+            if any(title_lower.startswith(kw) for kw in sub_keywords):
+                out.append(f"### {title}")
+            else:
+                out.append(f"## {title}")
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
 def parse_release_notes(body: str) -> dict:
     """Parse the PR body to extract structured release notes."""
     if not body:
@@ -230,10 +261,18 @@ def parse_release_notes(body: str) -> dict:
                 notes_start = idx + len(marker)
             break
 
+    # If no markdown headers found, try bold-style headers
+    if notes_start is None:
+        # Look for the first **bold** line that could be a component header
+        m = re.search(r"(?m)^\*\*.+\*\*\s*$", body)
+        if m:
+            notes_start = m.start()
+
     if notes_start is None:
         return {"raw": "", "components": []}
 
     notes_text = body[notes_start:].strip()
+    notes_text = _normalize_bold_headers(notes_text)
 
     components = []
     sections = re.split(r"(?=^## )", notes_text, flags=re.MULTILINE)
