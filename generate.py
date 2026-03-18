@@ -371,12 +371,15 @@ def scrape_upcoming(token: str | None) -> list[dict]:
 
         try:
             pr = get_pr_details(pr_number, token)
+            files = get_pr_files(pr_number, token)
         except HTTPError as e:
             logger.warning(f"Skipping open PR #{pr_number}: API error {e.code}")
             continue
 
         environment = extract_environment(title)
         version = extract_version(title)
+        old_image, new_image = extract_index_images(files)
+        clusters = extract_clusters(files)
         release_notes = parse_release_notes(pr.get("body", ""))
 
         upcoming.append({
@@ -387,6 +390,9 @@ def scrape_upcoming(token: str | None) -> list[dict]:
             "environment": environment,
             "created_at": pr.get("created_at", ""),
             "author": pr.get("user", {}).get("login", ""),
+            "old_index_image": old_image,
+            "new_index_image": new_image,
+            "clusters": clusters,
             "release_notes": release_notes,
             "component_count": len(release_notes.get("components", [])),
         })

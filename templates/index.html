@@ -611,6 +611,28 @@
             <span>{{ up.created_at[:10] if up.created_at else '?' }}</span>
           </div>
         </div>
+        {% if up.new_index_image %}
+        <div class="image-bar">
+        {% if up.old_index_image %}
+        <div class="image-row">
+          <span class="label old">Old</span>
+          <span class="digest">{{ up.old_index_image }}</span>
+        </div>
+        {% endif %}
+        <div class="image-row">
+          <span class="label new">New</span>
+          <span class="digest">{{ up.new_index_image }}</span>
+        </div>
+        </div>
+        {% endif %}
+        {% if up.clusters %}
+        <div class="clusters-bar">
+          <span class="clusters-label">Clusters</span>
+          {% for cluster in up.clusters %}
+          <span class="cluster-tag">{{ cluster }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
         {% if up.release_notes and up.release_notes.components %}
         <div class="components-wrapper">
           {% for comp in up.release_notes.components %}
