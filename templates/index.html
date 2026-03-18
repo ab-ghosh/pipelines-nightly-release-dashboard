@@ -696,7 +696,10 @@
         {% if release.component_count > 0 %}
         <span class="badge badge-components">{{ release.component_count }} components</span>
         {% endif %}
-        <span class="badge-date">{{ release.merged_at[:10] if release.merged_at else '' }}</span>
+        {% if release.created_at %}
+        <span class="badge-date">Raised {{ release.created_at[:10] }}</span>
+        {% endif %}
+        <span class="badge-date">Merged {{ release.merged_at[:10] if release.merged_at else '?' }}</span>
         <span class="chevron">&#x276F;</span>
       </div>
     </div>
@@ -712,6 +715,12 @@
           <span class="meta-key">Author</span>
           <span>{{ release.author }}</span>
         </div>
+        {% if release.created_at %}
+        <div class="meta-pair">
+          <span class="meta-key">Raised</span>
+          <span>{{ release.created_at[:10] }}</span>
+        </div>
+        {% endif %}
         <div class="meta-pair">
           <span class="meta-key">Merged</span>
           <span>{{ release.merged_at[:10] if release.merged_at else '?' }}</span>
