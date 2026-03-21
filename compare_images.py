@@ -548,8 +548,9 @@ def main():
 
         if pr_number in cached:
             # Re-process if JIRA tokens are set but cached entry has no JIRA data
+            repos = cached[pr_number].get("repos", {})
             has_jira = any(
-                repo.get("jira_tickets") for repo in cached[pr_number].get("repos", [])
+                repo_data.get("jira_tickets") for repo_data in repos.values()
             )
             if has_jira or not jira_token:
                 logger.info(f"PR #{pr_number}: using cached comparison")
