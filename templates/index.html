@@ -694,73 +694,113 @@
 </head>
 <body>
 
-{% macro render_comparison(comp) %}
-{% if comp and comp.repos %}
-{% set total_commits = comp.repos.values() | map(attribute='commit_count') | sum %}
-{% set total_jira = comp.repos.values() | map(attribute='jira_tickets') | map('length') | sum %}
-<div class="comparison-section">
-  <div class="comparison-toggle" onclick="this.parentElement.classList.toggle('comp-open')">
-    <div class="comparison-toggle-label">
-      &#x1F50D; Image Diff
-      <span class="comparison-toggle-stats">
-        {{ comp.repos | length }} repos &middot; {{ total_commits }} commits
-        {% if total_jira %} &middot; {{ total_jira }} JIRA tickets{% endif %}
-      </span>
+{% macro render_repo_diff(repo_data) %}
+{% if repo_data %}
+  <div class="repo-diff-inline">
+    <div class="sha-range" style="margin-bottom:8px;">
+      <a href="{{ repo_data.compare_url }}" target="_blank" rel="noopener">{{ repo_data.old_commit[:8] }} &rarr; {{ repo_data.new_commit[:8] }}</a>
+      <span class="stat-badge stat-commits" style="margin-left:8px;">{{ repo_data.commit_count }} commits</span>
+      {% if repo_data.jira_tickets %}
+      <span class="stat-badge stat-jira">{{ repo_data.jira_tickets | length }} JIRA</span>
+      {% endif %}
+    </div>
+    {% if repo_data.jira_tickets %}
+    <div class="rc-sub-heading">JIRA Tickets</div>
+    <ul class="rc-list">
+      {% for ticket in repo_data.jira_tickets %}
+      <li>
+        <a class="jira-key" href="{{ ticket.url }}" target="_blank" rel="noopener">{{ ticket.key }}</a>
+        <span class="jira-summary">{{ ticket.summary }}</span>
+        {% set st = ticket.status | lower %}
+        {% if 'done' in st or 'closed' in st or 'resolved' in st %}
+        <span class="jira-status jira-status-done">{{ ticket.status }}</span>
+        {% elif 'progress' in st or 'review' in st %}
+        <span class="jira-status jira-status-progress">{{ ticket.status }}</span>
+        {% else %}
+        <span class="jira-status jira-status-other">{{ ticket.status }}</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <div class="rc-sub-heading">Commits</div>
+    <ul class="rc-list">
+      {% for commit in repo_data.commits %}
+      <li>
+        <a class="rc-sha" href="{{ commit.url }}" target="_blank" rel="noopener">{{ commit.sha[:8] }}</a>
+        <span class="rc-msg">{{ commit.message.split('\n')[0] }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+{% endmacro %}
+
+{# Map component name to comparison repo key #}
+{% macro match_repo(comp_name, comparison) %}
+  {%- if comparison and comparison.repos -%}
+    {%- set name_lower = comp_name | lower -%}
+    {%- if 'pipelines as code' in name_lower or 'pipelines-as-code' in name_lower or 'pac' in name_lower -%}
+      {{- 'openshift-pipelines/pipelines-as-code' -}}
+    {%- elif 'operator' in name_lower -%}
+      {{- 'tektoncd/operator' -}}
+    {%- elif 'pipeline' in name_lower -%}
+      {{- 'tektoncd/pipeline' -}}
+    {%- endif -%}
+  {%- endif -%}
+{% endmacro %}
+
+{# Render component section with release notes + comparison data #}
+{% macro render_component(comp, comparison, idx) %}
+<div class="component-section comp-expanded">
+  <div class="component-header-inner" onclick="this.parentElement.classList.toggle('comp-expanded')">
+    <div class="comp-name">
+      <div class="comp-icon c{{ idx % 8 }}">{{ comp.name[:2] | upper }}</div>
+      <span>{{ comp.name }}</span>
+      {% if comp.subsections %}
+      <span class="comp-sub-count">{{ comp.subsections | length }} sections</span>
+      {% endif %}
     </div>
     <span class="comp-chevron">&#x276F;</span>
   </div>
-  <div class="comparison-body">
-    {% for repo_name, repo_data in comp.repos.items() | sort %}
-    <div class="repo-change">
-      <div class="repo-change-header" onclick="this.parentElement.classList.toggle('rc-open')">
-        <div class="repo-change-name">
-          <a href="{{ repo_data.compare_url }}" target="_blank" rel="noopener">{{ repo_name }}</a>
-          <span class="sha-range">{{ repo_data.old_commit[:8] }} &rarr; {{ repo_data.new_commit[:8] }}</span>
-        </div>
-        <div class="repo-change-stats">
-          <span class="stat-badge stat-commits">{{ repo_data.commit_count }} commits</span>
-          {% if repo_data.jira_tickets %}
-          <span class="stat-badge stat-jira">{{ repo_data.jira_tickets | length }} JIRA</span>
+  <div class="comp-body">
+    {% if comp.subsections_html %}
+      {% for sub_name, sub_html in comp.subsections_html.items() %}
+      <div class="subsection">
+        <div class="subsection-header">
+          {% set sub_lower = sub_name | lower %}
+          {% if 'breaking' in sub_lower %}
+          <div class="subsection-icon breaking">!</div>
+          <div class="subsection-title breaking">{{ sub_name }}</div>
+          {% elif 'feature' in sub_lower or 'new' in sub_lower %}
+          <div class="subsection-icon features">+</div>
+          <div class="subsection-title features">{{ sub_name }}</div>
+          {% elif 'fix' in sub_lower or 'bug' in sub_lower %}
+          <div class="subsection-icon bugfix">&#x2714;</div>
+          <div class="subsection-title bugfix">{{ sub_name }}</div>
+          {% elif 'doc' in sub_lower %}
+          <div class="subsection-icon docs">&#x270E;</div>
+          <div class="subsection-title docs">{{ sub_name }}</div>
+          {% else %}
+          <div class="subsection-icon other">&#x2022;</div>
+          <div class="subsection-title other">{{ sub_name }}</div>
           {% endif %}
-          <span class="rc-chevron">&#x276F;</span>
         </div>
+        <div class="md-content">{{ sub_html | safe }}</div>
       </div>
-      <div class="repo-change-body">
-        {% if repo_data.jira_tickets %}
-        <div class="rc-sub-heading">JIRA Tickets</div>
-        <ul class="rc-list">
-          {% for ticket in repo_data.jira_tickets %}
-          <li>
-            <a class="jira-key" href="{{ ticket.url }}" target="_blank" rel="noopener">{{ ticket.key }}</a>
-            <span class="jira-summary">{{ ticket.summary }}</span>
-            {% set st = ticket.status | lower %}
-            {% if 'done' in st or 'closed' in st or 'resolved' in st %}
-            <span class="jira-status jira-status-done">{{ ticket.status }}</span>
-            {% elif 'progress' in st or 'review' in st %}
-            <span class="jira-status jira-status-progress">{{ ticket.status }}</span>
-            {% else %}
-            <span class="jira-status jira-status-other">{{ ticket.status }}</span>
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-
-        <div class="rc-sub-heading">Commits</div>
-        <ul class="rc-list">
-          {% for commit in repo_data.commits %}
-          <li>
-            <a class="rc-sha" href="{{ commit.url }}" target="_blank" rel="noopener">{{ commit.sha[:8] }}</a>
-            <span class="rc-msg">{{ commit.message.split('\n')[0] }}</span>
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-    {% endfor %}
+      {% endfor %}
+    {% elif comp.raw_html %}
+      <div class="md-content">{{ comp.raw_html | safe }}</div>
+    {% else %}
+      <div class="md-content"><p style="color:var(--text-dim)">No details available.</p></div>
+    {% endif %}
+    {# Inject comparison data for this component #}
+    {% set repo_key = match_repo(comp.name, comparison) | trim %}
+    {% if repo_key and comparison and comparison.repos and repo_key in comparison.repos %}
+      {{ render_repo_diff(comparison.repos[repo_key]) }}
+    {% endif %}
   </div>
 </div>
-{% endif %}
 {% endmacro %}
 
 <header class="header">
@@ -872,57 +912,16 @@
           {% endfor %}
         </div>
         {% endif %}
+        {% set up_comparison = comparisons.get(up.pr_number | string) %}
         {% if up.release_notes and up.release_notes.components %}
         <div class="components-wrapper">
           {% for comp in up.release_notes.components %}
-          <div class="component-section comp-expanded">
-            <div class="component-header-inner" onclick="this.parentElement.classList.toggle('comp-expanded')">
-              <div class="comp-name">
-                <div class="comp-icon c{{ loop.index0 % 8 }}">{{ comp.name[:2] | upper }}</div>
-                <span>{{ comp.name }}</span>
-                {% if comp.subsections %}
-                <span class="comp-sub-count">{{ comp.subsections | length }} sections</span>
-                {% endif %}
-              </div>
-              <span class="comp-chevron">&#x276F;</span>
-            </div>
-            <div class="comp-body">
-              {% if comp.subsections_html %}
-                {% for sub_name, sub_html in comp.subsections_html.items() %}
-                <div class="subsection">
-                  <div class="subsection-header">
-                    {% set sub_lower = sub_name | lower %}
-                    {% if 'breaking' in sub_lower %}
-                    <div class="subsection-icon breaking">!</div>
-                    <div class="subsection-title breaking">{{ sub_name }}</div>
-                    {% elif 'feature' in sub_lower or 'new' in sub_lower %}
-                    <div class="subsection-icon features">+</div>
-                    <div class="subsection-title features">{{ sub_name }}</div>
-                    {% elif 'fix' in sub_lower or 'bug' in sub_lower %}
-                    <div class="subsection-icon bugfix">&#x2714;</div>
-                    <div class="subsection-title bugfix">{{ sub_name }}</div>
-                    {% elif 'doc' in sub_lower %}
-                    <div class="subsection-icon docs">&#x270E;</div>
-                    <div class="subsection-title docs">{{ sub_name }}</div>
-                    {% else %}
-                    <div class="subsection-icon other">&#x2022;</div>
-                    <div class="subsection-title other">{{ sub_name }}</div>
-                    {% endif %}
-                  </div>
-                  <div class="md-content">{{ sub_html | safe }}</div>
-                </div>
-                {% endfor %}
-              {% elif comp.raw_html %}
-                <div class="md-content">{{ comp.raw_html | safe }}</div>
-              {% endif %}
-            </div>
-          </div>
+            {{ render_component(comp, up_comparison, loop.index0) }}
           {% endfor %}
         </div>
         {% else %}
           <div class="no-notes">No structured release notes available yet.</div>
         {% endif %}
-        {{ render_comparison(comparisons.get(up.pr_number | string)) }}
       </div>
     </div>
     {% endfor %}
@@ -1022,59 +1021,16 @@
       {% endif %}
 
       <!-- Component release notes -->
+      {% set rel_comparison = comparisons.get(release.pr_number | string) %}
       {% if release.release_notes and release.release_notes.components %}
       <div class="components-wrapper">
         {% for comp in release.release_notes.components %}
-        <div class="component-section comp-expanded">
-          <div class="component-header-inner" onclick="this.parentElement.classList.toggle('comp-expanded')">
-            <div class="comp-name">
-              <div class="comp-icon c{{ loop.index0 % 8 }}">{{ comp.name[:2] | upper }}</div>
-              <span>{{ comp.name }}</span>
-              {% if comp.subsections %}
-              <span class="comp-sub-count">{{ comp.subsections | length }} sections</span>
-              {% endif %}
-            </div>
-            <span class="comp-chevron">&#x276F;</span>
-          </div>
-          <div class="comp-body">
-            {% if comp.subsections_html %}
-              {% for sub_name, sub_html in comp.subsections_html.items() %}
-              <div class="subsection">
-                <div class="subsection-header">
-                  {% set sub_lower = sub_name | lower %}
-                  {% if 'breaking' in sub_lower %}
-                  <div class="subsection-icon breaking">!</div>
-                  <div class="subsection-title breaking">{{ sub_name }}</div>
-                  {% elif 'feature' in sub_lower or 'new' in sub_lower %}
-                  <div class="subsection-icon features">+</div>
-                  <div class="subsection-title features">{{ sub_name }}</div>
-                  {% elif 'fix' in sub_lower or 'bug' in sub_lower %}
-                  <div class="subsection-icon bugfix">&#x2714;</div>
-                  <div class="subsection-title bugfix">{{ sub_name }}</div>
-                  {% elif 'doc' in sub_lower %}
-                  <div class="subsection-icon docs">&#x270E;</div>
-                  <div class="subsection-title docs">{{ sub_name }}</div>
-                  {% else %}
-                  <div class="subsection-icon other">&#x2022;</div>
-                  <div class="subsection-title other">{{ sub_name }}</div>
-                  {% endif %}
-                </div>
-                <div class="md-content">{{ sub_html | safe }}</div>
-              </div>
-              {% endfor %}
-            {% elif comp.raw_html %}
-              <div class="md-content">{{ comp.raw_html | safe }}</div>
-            {% else %}
-              <div class="md-content"><p style="color:var(--text-dim)">No details available.</p></div>
-            {% endif %}
-          </div>
-        </div>
+          {{ render_component(comp, rel_comparison, loop.index0) }}
         {% endfor %}
       </div>
       {% else %}
         <div class="no-notes">No structured release notes available for this upgrade.</div>
       {% endif %}
-      {{ render_comparison(comparisons.get(release.pr_number | string)) }}
     </div>
   </div>
   {% endfor %}
