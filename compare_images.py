@@ -202,19 +202,19 @@ def fetch_jira_details(keys, jira_token, jira_email, jira_url=DEFAULT_JIRA_URL):
     # Batch in groups of 50 to avoid URL length limits
     for i in range(0, len(keys), 50):
         batch = keys[i : i + 50]
-        from urllib.parse import urlencode
         jql = f"key in ({','.join(batch)})"
-        params = urlencode({
+        url = f"{jira_url}/rest/api/3/search/jql"
+        payload = json.dumps({
             "jql": jql,
-            "fields": "summary,status,assignee,priority,issuetype",
+            "fields": ["summary", "status", "assignee", "priority", "issuetype"],
             "maxResults": 50,
-        })
-        url = f"{jira_url}/rest/api/2/search?{params}"
+        }).encode()
         headers = {
             "Authorization": auth_header,
             "Accept": "application/json",
+            "Content-Type": "application/json",
         }
-        req = Request(url, headers=headers)
+        req = Request(url, data=payload, headers=headers, method="POST")
         try:
             with urlopen(req) as resp:
                 data = json.load(resp)
@@ -547,8 +547,14 @@ def main():
             continue
 
         if pr_number in cached:
-            logger.info(f"PR #{pr_number}: using cached comparison")
-            continue
+            # Re-process if JIRA tokens are set but cached entry has no JIRA data
+            has_jira = any(
+                repo.get("jira_tickets") for repo in cached[pr_number].get("repos", [])
+            )
+            if has_jira or not jira_token:
+                logger.info(f"PR #{pr_number}: using cached comparison")
+                continue
+            logger.info(f"PR #{pr_number}: re-processing to fetch JIRA data")
 
         logger.info(f"PR #{pr_number}: comparing images...")
         try:
