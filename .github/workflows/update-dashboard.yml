@@ -44,8 +44,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: data/comparisons.json
-          key: comparisons-v2
-          restore-keys: comparisons-v2
+          key: comparisons-v3
+          restore-keys: comparisons-v3
 
       - name: Generate dashboard
         env:

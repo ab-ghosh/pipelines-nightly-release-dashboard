@@ -180,6 +180,88 @@ def extract_jira_keys(commits):
     return sorted(keys)
 
 
+def search_jira_by_pr_urls(pr_urls, jira_token, jira_email, jira_url=DEFAULT_JIRA_URL):
+    """Search JIRA for tickets that mention any of the given PR URLs.
+
+    Returns a dict mapping PR URL to list of JIRA ticket dicts.
+    """
+    if not pr_urls or not jira_token:
+        return {}
+
+    if jira_email:
+        creds = base64.b64encode(f"{jira_email}:{jira_token}".encode()).decode()
+        auth_header = f"Basic {creds}"
+    else:
+        auth_header = f"Bearer {jira_token}"
+
+    pr_to_tickets = {}
+    # Batch in groups of 10 PR URLs per JQL query
+    for i in range(0, len(pr_urls), 10):
+        batch = pr_urls[i : i + 10]
+        text_clauses = " OR ".join(f'text ~ "{url}"' for url in batch)
+        jql = f"project = SRVKP AND ({text_clauses})"
+        url = f"{jira_url}/rest/api/3/search/jql"
+        payload = json.dumps({
+            "jql": jql,
+            "fields": ["summary", "status", "assignee", "priority", "issuetype", "description"],
+            "maxResults": 50,
+        }).encode()
+        headers = {
+            "Authorization": auth_header,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        req = Request(url, data=payload, headers=headers, method="POST")
+        try:
+            with urlopen(req) as resp:
+                data = json.load(resp)
+                for issue in data.get("issues", []):
+                    fields = issue.get("fields", {})
+                    ticket = {
+                        "key": issue.get("key", ""),
+                        "summary": fields.get("summary", ""),
+                        "status": fields.get("status", {}).get("name", ""),
+                        "priority": fields.get("priority", {}).get("name", ""),
+                        "type": fields.get("issuetype", {}).get("name", ""),
+                        "assignee": (fields.get("assignee") or {}).get(
+                            "displayName", "Unassigned"
+                        ),
+                        "url": f"{jira_url}/browse/{issue.get('key', '')}",
+                    }
+                    # Map ticket to matching PR URLs
+                    desc = _flatten_adf(fields.get("description")) if fields.get("description") else ""
+                    for pr_url in batch:
+                        if pr_url in desc:
+                            pr_to_tickets.setdefault(pr_url, []).append(ticket)
+        except HTTPError as e:
+            logger.warning(f"JIRA search by PR URL error {e.code}")
+        except Exception as e:
+            logger.warning(f"JIRA search by PR URL error: {e}")
+
+    return pr_to_tickets
+
+
+def _flatten_adf(node):
+    """Flatten Atlassian Document Format (ADF) JSON to plain text."""
+    if isinstance(node, str):
+        return node
+    if isinstance(node, dict):
+        parts = []
+        if node.get("type") == "text":
+            parts.append(node.get("text", ""))
+            # Extract link hrefs from marks
+            for mark in node.get("marks", []):
+                if mark.get("type") == "link":
+                    parts.append(" " + mark.get("attrs", {}).get("href", "") + " ")
+        if "url" in node.get("attrs", {}):
+            parts.append(" " + node["attrs"]["url"] + " ")
+        parts.append("".join(_flatten_adf(c) for c in node.get("content", [])))
+        return "".join(parts)
+    if isinstance(node, list):
+        return "".join(_flatten_adf(c) for c in node)
+    return ""
+
+
 def fetch_jira_details(keys, jira_token, jira_email, jira_url=DEFAULT_JIRA_URL):
     """Fetch JIRA ticket details for a list of keys.
 
@@ -467,13 +549,42 @@ def compare_index_images(old_image, new_image, github_token, jira_token, jira_em
         jira_keys = sorted(set(jira_keys))
         jira_tickets = []
         if jira_keys:
-            logger.info(f"  Found JIRA references: {', '.join(jira_keys)}")
+            logger.info(f"  Found JIRA references in commits/PRs: {', '.join(jira_keys)}")
             jira_tickets = fetch_jira_details(jira_keys, jira_token, jira_email, jira_url)
 
-        # Tag each commit with its JIRA keys for inline display
+        # Search JIRA for tickets that mention PR URLs (reverse lookup)
+        pr_urls = [pr["url"] for pr in pull_requests if pr.get("url")]
+        pr_to_jira = {}
+        if pr_urls and jira_token:
+            logger.info(f"  Searching JIRA for tickets mentioning {len(pr_urls)} PR URLs...")
+            pr_to_jira = search_jira_by_pr_urls(pr_urls, jira_token, jira_email, jira_url)
+            # Merge newly found tickets into jira_tickets
+            seen_keys = {t["key"] for t in jira_tickets}
+            for tickets in pr_to_jira.values():
+                for t in tickets:
+                    if t["key"] not in seen_keys:
+                        seen_keys.add(t["key"])
+                        jira_tickets.append(t)
+            if pr_to_jira:
+                new_keys = [t["key"] for ts in pr_to_jira.values() for t in ts]
+                logger.info(f"  Found JIRA tickets via PR URLs: {', '.join(sorted(set(new_keys)))}")
+
+        # Build commit→PR number mapping and tag commits with JIRA keys
+        pr_pattern = re.compile(r"#(\d+)\b")
+        pr_url_by_number = {pr["number"]: pr["url"] for pr in pull_requests}
         jira_by_key = {t["key"]: t for t in jira_tickets}
         for c in commits:
+            # JIRA keys directly in commit message
             commit_keys = JIRA_PATTERN.findall(c.get("message", ""))
+            # JIRA keys from PR URLs mentioned in JIRA tickets
+            msg_first_line = c.get("message", "").split("\n")[0]
+            for m in pr_pattern.findall(msg_first_line):
+                pr_num = int(m)
+                pr_url = pr_url_by_number.get(pr_num, "")
+                if pr_url and pr_url in pr_to_jira:
+                    for t in pr_to_jira[pr_url]:
+                        if t["key"] not in commit_keys:
+                            commit_keys.append(t["key"])
             c["jira_keys"] = [k for k in commit_keys if k in jira_by_key]
 
         changes[git_repo] = {
