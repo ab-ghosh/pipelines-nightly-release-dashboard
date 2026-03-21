@@ -205,7 +205,6 @@ def search_jira_by_date_range(component, date_from, date_to, jira_token, jira_em
     jql = (
         f'project = SRVKP AND component = "{component}" '
         f'AND resolved >= "{date_from}" AND resolved <= "{date_to}" '
-        f'AND summary !~ "CVE-" '
         f'ORDER BY resolved DESC'
     )
     logger.debug(f"JIRA date range query: {jql}")
@@ -254,6 +253,8 @@ def search_jira_by_date_range(component, date_from, date_to, jira_token, jira_em
             logger.warning(f"JIRA date range search error: {e}")
             break
 
+    # Filter out CVE tickets (JQL text search is unreliable for this)
+    tickets = [t for t in tickets if "CVE-" not in t.get("summary", "")]
     return tickets
 
 
