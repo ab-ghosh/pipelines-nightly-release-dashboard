@@ -460,12 +460,21 @@ def compare_index_images(old_image, new_image, github_token, jira_token, jira_em
 
         logger.info(f"  Found {len(pull_requests)} PRs")
 
-        # Extract JIRA tickets from commit messages
+        # Extract JIRA tickets from commit messages AND PR titles
         jira_keys = extract_jira_keys(commits)
+        for pr in pull_requests:
+            jira_keys.extend(JIRA_PATTERN.findall(pr.get("title", "")))
+        jira_keys = sorted(set(jira_keys))
         jira_tickets = []
         if jira_keys:
             logger.info(f"  Found JIRA references: {', '.join(jira_keys)}")
             jira_tickets = fetch_jira_details(jira_keys, jira_token, jira_email, jira_url)
+
+        # Tag each commit with its JIRA keys for inline display
+        jira_by_key = {t["key"]: t for t in jira_tickets}
+        for c in commits:
+            commit_keys = JIRA_PATTERN.findall(c.get("message", ""))
+            c["jira_keys"] = [k for k in commit_keys if k in jira_by_key]
 
         changes[git_repo] = {
             "old_commit": old_commit,
