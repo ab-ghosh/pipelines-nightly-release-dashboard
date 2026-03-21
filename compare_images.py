@@ -180,13 +180,21 @@ def extract_jira_keys(commits):
     return sorted(keys)
 
 
-def search_jira_by_pr_urls(pr_urls, jira_token, jira_email, jira_url=DEFAULT_JIRA_URL):
-    """Search JIRA for tickets that mention any of the given PR URLs.
+# Mapping from git repo to JIRA component name
+REPO_TO_JIRA_COMPONENT = {
+    "tektoncd/pipeline": "Tekton Pipelines",
+    "tektoncd/operator": "Operator",
+    "openshift-pipelines/pipelines-as-code": "Pipelines as Code",
+}
 
-    Returns a dict mapping PR URL to list of JIRA ticket dicts.
+
+def search_jira_by_date_range(component, date_from, date_to, jira_token, jira_email, jira_url=DEFAULT_JIRA_URL):
+    """Search JIRA for tickets resolved between two dates for a given component.
+
+    Returns a list of JIRA ticket dicts.
     """
-    if not pr_urls or not jira_token:
-        return {}
+    if not jira_token or not component:
+        return []
 
     if jira_email:
         creds = base64.b64encode(f"{jira_email}:{jira_token}".encode()).decode()
@@ -194,18 +202,26 @@ def search_jira_by_pr_urls(pr_urls, jira_token, jira_email, jira_url=DEFAULT_JIR
     else:
         auth_header = f"Bearer {jira_token}"
 
-    pr_to_tickets = {}
-    # Batch in groups of 10 PR URLs per JQL query
-    for i in range(0, len(pr_urls), 10):
-        batch = pr_urls[i : i + 10]
-        text_clauses = " OR ".join(f'text ~ "{url}"' for url in batch)
-        jql = f"project = SRVKP AND ({text_clauses})"
+    jql = (
+        f'project = SRVKP AND component = "{component}" '
+        f'AND resolved >= "{date_from}" AND resolved <= "{date_to}" '
+        f'AND summary !~ "CVE-" '
+        f'ORDER BY resolved DESC'
+    )
+    logger.debug(f"JIRA date range query: {jql}")
+
+    tickets = []
+    next_token = None
+    while True:
         url = f"{jira_url}/rest/api/3/search/jql"
-        payload = json.dumps({
+        body = {
             "jql": jql,
-            "fields": ["summary", "status", "assignee", "priority", "issuetype", "description"],
+            "fields": ["summary", "status", "assignee", "priority", "issuetype"],
             "maxResults": 50,
-        }).encode()
+        }
+        if next_token:
+            body["nextPageToken"] = next_token
+        payload = json.dumps(body).encode()
         headers = {
             "Authorization": auth_header,
             "Accept": "application/json",
@@ -217,7 +233,7 @@ def search_jira_by_pr_urls(pr_urls, jira_token, jira_email, jira_url=DEFAULT_JIR
                 data = json.load(resp)
                 for issue in data.get("issues", []):
                     fields = issue.get("fields", {})
-                    ticket = {
+                    tickets.append({
                         "key": issue.get("key", ""),
                         "summary": fields.get("summary", ""),
                         "status": fields.get("status", {}).get("name", ""),
@@ -227,39 +243,18 @@ def search_jira_by_pr_urls(pr_urls, jira_token, jira_email, jira_url=DEFAULT_JIR
                             "displayName", "Unassigned"
                         ),
                         "url": f"{jira_url}/browse/{issue.get('key', '')}",
-                    }
-                    # Map ticket to matching PR URLs
-                    desc = _flatten_adf(fields.get("description")) if fields.get("description") else ""
-                    for pr_url in batch:
-                        if pr_url in desc:
-                            pr_to_tickets.setdefault(pr_url, []).append(ticket)
+                    })
+                next_token = data.get("nextPageToken")
+                if not next_token or not data.get("issues"):
+                    break
         except HTTPError as e:
-            logger.warning(f"JIRA search by PR URL error {e.code}")
+            logger.warning(f"JIRA date range search error {e.code} for {component}")
+            break
         except Exception as e:
-            logger.warning(f"JIRA search by PR URL error: {e}")
+            logger.warning(f"JIRA date range search error: {e}")
+            break
 
-    return pr_to_tickets
-
-
-def _flatten_adf(node):
-    """Flatten Atlassian Document Format (ADF) JSON to plain text."""
-    if isinstance(node, str):
-        return node
-    if isinstance(node, dict):
-        parts = []
-        if node.get("type") == "text":
-            parts.append(node.get("text", ""))
-            # Extract link hrefs from marks
-            for mark in node.get("marks", []):
-                if mark.get("type") == "link":
-                    parts.append(" " + mark.get("attrs", {}).get("href", "") + " ")
-        if "url" in node.get("attrs", {}):
-            parts.append(" " + node["attrs"]["url"] + " ")
-        parts.append("".join(_flatten_adf(c) for c in node.get("content", [])))
-        return "".join(parts)
-    if isinstance(node, list):
-        return "".join(_flatten_adf(c) for c in node)
-    return ""
+    return tickets
 
 
 def fetch_jira_details(keys, jira_token, jira_email, jira_url=DEFAULT_JIRA_URL):
@@ -542,7 +537,7 @@ def compare_index_images(old_image, new_image, github_token, jira_token, jira_em
 
         logger.info(f"  Found {len(pull_requests)} PRs")
 
-        # Extract JIRA tickets from commit messages AND PR titles
+        # 1) Extract JIRA tickets from commit messages AND PR titles
         jira_keys = extract_jira_keys(commits)
         for pr in pull_requests:
             jira_keys.extend(JIRA_PATTERN.findall(pr.get("title", "")))
@@ -552,40 +547,26 @@ def compare_index_images(old_image, new_image, github_token, jira_token, jira_em
             logger.info(f"  Found JIRA references in commits/PRs: {', '.join(jira_keys)}")
             jira_tickets = fetch_jira_details(jira_keys, jira_token, jira_email, jira_url)
 
-        # Search JIRA for tickets that mention PR URLs (reverse lookup)
-        pr_urls = [pr["url"] for pr in pull_requests if pr.get("url")]
-        pr_to_jira = {}
-        if pr_urls and jira_token:
-            logger.info(f"  Searching JIRA for tickets mentioning {len(pr_urls)} PR URLs...")
-            pr_to_jira = search_jira_by_pr_urls(pr_urls, jira_token, jira_email, jira_url)
-            # Merge newly found tickets into jira_tickets
-            seen_keys = {t["key"] for t in jira_tickets}
-            for tickets in pr_to_jira.values():
-                for t in tickets:
+        # 2) Search JIRA by date range + component for additional tickets
+        jira_component = REPO_TO_JIRA_COMPONENT.get(git_repo)
+        if jira_component and jira_token and commits:
+            dates = sorted(c.get("date", "")[:10] for c in commits if c.get("date"))
+            if dates:
+                date_from, date_to = dates[0], dates[-1]
+                logger.info(f"  Searching JIRA for {jira_component} tickets resolved {date_from} to {date_to}...")
+                date_tickets = search_jira_by_date_range(
+                    jira_component, date_from, date_to, jira_token, jira_email, jira_url
+                )
+                # Merge, deduplicate
+                seen_keys = {t["key"] for t in jira_tickets}
+                new_count = 0
+                for t in date_tickets:
                     if t["key"] not in seen_keys:
                         seen_keys.add(t["key"])
                         jira_tickets.append(t)
-            if pr_to_jira:
-                new_keys = [t["key"] for ts in pr_to_jira.values() for t in ts]
-                logger.info(f"  Found JIRA tickets via PR URLs: {', '.join(sorted(set(new_keys)))}")
-
-        # Build commit→PR number mapping and tag commits with JIRA keys
-        pr_pattern = re.compile(r"#(\d+)\b")
-        pr_url_by_number = {pr["number"]: pr["url"] for pr in pull_requests}
-        jira_by_key = {t["key"]: t for t in jira_tickets}
-        for c in commits:
-            # JIRA keys directly in commit message
-            commit_keys = JIRA_PATTERN.findall(c.get("message", ""))
-            # JIRA keys from PR URLs mentioned in JIRA tickets
-            msg_first_line = c.get("message", "").split("\n")[0]
-            for m in pr_pattern.findall(msg_first_line):
-                pr_num = int(m)
-                pr_url = pr_url_by_number.get(pr_num, "")
-                if pr_url and pr_url in pr_to_jira:
-                    for t in pr_to_jira[pr_url]:
-                        if t["key"] not in commit_keys:
-                            commit_keys.append(t["key"])
-            c["jira_keys"] = [k for k in commit_keys if k in jira_by_key]
+                        new_count += 1
+                if new_count:
+                    logger.info(f"  Found {new_count} additional JIRA tickets via date range search")
 
         changes[git_repo] = {
             "old_commit": old_commit,
