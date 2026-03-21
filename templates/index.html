@@ -711,10 +711,6 @@
   </div>
   <div class="comparison-body">
     {% for repo_name, repo_data in comp.repos.items() | sort %}
-    {% set ns = namespace(jira_map={}) %}
-    {% for t in repo_data.jira_tickets %}
-      {% set _ = ns.jira_map.update({t.key: t}) %}
-    {% endfor %}
     <div class="repo-change">
       <div class="repo-change-header" onclick="this.parentElement.classList.toggle('rc-open')">
         <div class="repo-change-name">
@@ -730,18 +726,32 @@
         </div>
       </div>
       <div class="repo-change-body">
+        {% if repo_data.jira_tickets %}
+        <div class="rc-sub-heading">JIRA Tickets</div>
+        <ul class="rc-list">
+          {% for ticket in repo_data.jira_tickets %}
+          <li>
+            <a class="jira-key" href="{{ ticket.url }}" target="_blank" rel="noopener">{{ ticket.key }}</a>
+            <span class="jira-summary">{{ ticket.summary }}</span>
+            {% set st = ticket.status | lower %}
+            {% if 'done' in st or 'closed' in st or 'resolved' in st %}
+            <span class="jira-status jira-status-done">{{ ticket.status }}</span>
+            {% elif 'progress' in st or 'review' in st %}
+            <span class="jira-status jira-status-progress">{{ ticket.status }}</span>
+            {% else %}
+            <span class="jira-status jira-status-other">{{ ticket.status }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
         <div class="rc-sub-heading">Commits</div>
         <ul class="rc-list">
           {% for commit in repo_data.commits %}
           <li>
             <a class="rc-sha" href="{{ commit.url }}" target="_blank" rel="noopener">{{ commit.sha[:8] }}</a>
             <span class="rc-msg">{{ commit.message.split('\n')[0] }}</span>
-            {% for jk in commit.jira_keys | default([]) %}
-              {% set ticket = ns.jira_map.get(jk) %}
-              {% if ticket %}
-              <a class="jira-key" href="{{ ticket.url }}" target="_blank" rel="noopener">{{ ticket.key }}</a>
-              {% endif %}
-            {% endfor %}
           </li>
           {% endfor %}
         </ul>

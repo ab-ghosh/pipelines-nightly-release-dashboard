@@ -655,9 +655,6 @@ def main():
 
     processed = 0
     for release in all_releases:
-        if processed >= args.limit:
-            break
-
         pr_number = str(release.get("pr_number", ""))
         old_image = release.get("old_index_image", "")
         new_image = release.get("new_index_image", "")
@@ -667,15 +664,12 @@ def main():
             continue
 
         if pr_number in cached:
-            # Re-process if JIRA tokens are set but cached entry has no JIRA data
-            repos = cached[pr_number].get("repos", {})
-            has_jira = any(
-                repo_data.get("jira_tickets") for repo_data in repos.values()
-            )
-            if has_jira or not jira_token:
-                logger.info(f"PR #{pr_number}: using cached comparison")
-                continue
-            logger.info(f"PR #{pr_number}: re-processing to fetch JIRA data")
+            logger.info(f"PR #{pr_number}: using cached comparison")
+            continue
+
+        if processed >= args.limit:
+            logger.info(f"PR #{pr_number}: skipping (limit of {args.limit} new comparisons reached)")
+            continue
 
         logger.info(f"PR #{pr_number}: comparing images...")
         try:

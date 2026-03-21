@@ -44,8 +44,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: data/comparisons.json
-          key: comparisons-v3
-          restore-keys: comparisons-v3
+          key: comparisons-v4
+          restore-keys: comparisons-v4
 
       - name: Generate dashboard
         env:
@@ -62,7 +62,7 @@ jobs:
           if [ -f data/comparisons.json ]; then
             echo "Using cached comparisons from previous runs"
           fi
-          uv run python compare_images.py --input data/releases.json --output data/comparisons.json --limit 5 -v
+          uv run python compare_images.py --input data/releases.json --output data/comparisons.json --limit 10 -v
         continue-on-error: true
 
       - name: Re-render dashboard with comparisons
