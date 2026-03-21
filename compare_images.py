@@ -202,8 +202,14 @@ def fetch_jira_details(keys, jira_token, jira_email, jira_url=DEFAULT_JIRA_URL):
     # Batch in groups of 50 to avoid URL length limits
     for i in range(0, len(keys), 50):
         batch = keys[i : i + 50]
+        from urllib.parse import urlencode
         jql = f"key in ({','.join(batch)})"
-        url = f"{jira_url}/rest/api/2/search?jql={jql}&fields=summary,status,assignee,priority,issuetype&maxResults=50"
+        params = urlencode({
+            "jql": jql,
+            "fields": "summary,status,assignee,priority,issuetype",
+            "maxResults": 50,
+        })
+        url = f"{jira_url}/rest/api/2/search?{params}"
         headers = {
             "Authorization": auth_header,
             "Accept": "application/json",
