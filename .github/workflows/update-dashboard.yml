@@ -66,11 +66,9 @@ jobs:
         continue-on-error: true
 
       - name: Re-render dashboard with comparisons
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -f data/comparisons.json ]; then
-            uv run python generate.py --limit 30 --output data/ -v
+            uv run python generate.py --render-only --output data/ -v
           fi
 
       - name: Upload artifact

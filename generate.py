@@ -518,6 +518,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate OpenShift Pipelines Nightly Release Dashboard")
     parser.add_argument("--limit", type=int, default=30, help="Max number of PRs to scrape (default: 30)")
     parser.add_argument("--output", type=str, default="data", help="Output directory (default: data/)")
+    parser.add_argument("--render-only", action="store_true", help="Re-render from existing releases.json (no API calls)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
 
     args = parser.parse_args()
@@ -532,14 +533,25 @@ def main():
         logger.warning("No GITHUB_TOKEN set. API rate limits will be very low (60 req/hr).")
 
     output_dir = Path(args.output)
-    releases = scrape_releases(token, limit=args.limit)
-    upcoming = scrape_upcoming(token)
 
-    if not releases:
-        logger.error("No releases found. Check your search queries and token.")
-        sys.exit(1)
+    if args.render_only:
+        releases_file = output_dir / "releases.json"
+        if not releases_file.exists():
+            logger.error(f"No {releases_file} found for --render-only")
+            sys.exit(1)
+        with open(releases_file) as f:
+            data = json.load(f)
+        releases = data.get("releases", [])
+        upcoming = data.get("upcoming", [])
+        logger.info(f"Re-rendering from {releases_file}: {len(releases)} releases, {len(upcoming)} upcoming")
+    else:
+        releases = scrape_releases(token, limit=args.limit)
+        upcoming = scrape_upcoming(token)
+        if not releases:
+            logger.error("No releases found. Check your search queries and token.")
+            sys.exit(1)
+        logger.info(f"\nCollected {len(releases)} releases, {len(upcoming)} upcoming")
 
-    logger.info(f"\nCollected {len(releases)} releases, {len(upcoming)} upcoming")
     generate_dashboard(releases, upcoming, output_dir)
     logger.info("Done!")
 
