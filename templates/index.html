@@ -485,6 +485,175 @@
       font-style: italic;
     }
 
+    /* Image Comparison Section */
+    .comparison-section {
+      border-top: 1px solid var(--border-light);
+    }
+    .comparison-toggle {
+      padding: 12px 22px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+      transition: background 0.15s;
+      background: rgba(250,179,135,0.04);
+    }
+    .comparison-toggle:hover { background: rgba(250,179,135,0.08); }
+    .comparison-toggle-label {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--orange);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .comparison-toggle-stats {
+      font-size: 12px;
+      color: var(--text-dim);
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .comparison-body {
+      display: none;
+      padding: 0;
+    }
+    .comparison-section.comp-open .comparison-body { display: block; }
+    .comparison-section.comp-open .comp-chevron { transform: rotate(90deg); }
+
+    /* Repo change row */
+    .repo-change {
+      border-top: 1px solid var(--border-light);
+    }
+    .repo-change-header {
+      padding: 10px 22px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .repo-change-header:hover { background: var(--surface-hover); }
+    .repo-change-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .repo-change-name a { color: var(--blue); text-decoration: none; font-weight: 600; }
+    .repo-change-name a:hover { text-decoration: underline; }
+    .repo-change-stats {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .stat-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .stat-commits { background: rgba(166,227,161,0.12); color: var(--green); }
+    .stat-prs { background: rgba(137,180,250,0.12); color: var(--blue); }
+    .stat-jira { background: rgba(250,179,135,0.12); color: var(--orange); }
+
+    .repo-change-body {
+      display: none;
+      padding: 0 22px 14px 22px;
+    }
+    .repo-change.rc-open .repo-change-body { display: block; }
+    .repo-change.rc-open .rc-chevron { transform: rotate(90deg); }
+    .rc-chevron {
+      color: var(--text-dim);
+      transition: transform 0.25s ease;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    /* Commit/PR/JIRA tables */
+    .rc-sub-heading {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      margin: 12px 0 6px 0;
+    }
+    .rc-sub-heading:first-child { margin-top: 4px; }
+
+    .rc-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .rc-list li {
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border-light);
+      font-size: 13px;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      line-height: 1.5;
+    }
+    .rc-list li:last-child { border-bottom: none; }
+    .rc-sha {
+      font-family: 'SF Mono','Fira Code', monospace;
+      font-size: 12px;
+      color: var(--blue);
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+    .rc-sha:hover { text-decoration: underline; }
+    .rc-msg {
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .rc-pr-num {
+      font-weight: 600;
+      color: var(--blue);
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+    .rc-pr-num:hover { text-decoration: underline; }
+    .rc-pr-title { color: var(--text-muted); }
+    .rc-pr-merged { font-size: 11px; color: var(--green); flex-shrink: 0; }
+
+    .jira-key {
+      font-weight: 600;
+      color: var(--orange);
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+    .jira-key:hover { text-decoration: underline; }
+    .jira-summary { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .jira-status {
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .jira-status-done { background: rgba(166,227,161,0.15); color: var(--green); }
+    .jira-status-progress { background: rgba(137,180,250,0.15); color: var(--blue); }
+    .jira-status-other { background: rgba(108,112,134,0.15); color: var(--text-muted); }
+
+    .sha-range {
+      font-family: 'SF Mono','Fira Code', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-left: 4px;
+    }
+
     /* Footer */
     .footer {
       text-align: center;
@@ -524,6 +693,93 @@
   </style>
 </head>
 <body>
+
+{% macro render_comparison(comp) %}
+{% if comp and comp.repos %}
+{% set total_commits = comp.repos.values() | map(attribute='commit_count') | sum %}
+{% set total_prs = comp.repos.values() | map(attribute='pull_requests') | map('length') | sum %}
+{% set total_jira = comp.repos.values() | map(attribute='jira_tickets') | map('length') | sum %}
+<div class="comparison-section">
+  <div class="comparison-toggle" onclick="this.parentElement.classList.toggle('comp-open')">
+    <div class="comparison-toggle-label">
+      &#x1F50D; Image Diff
+      <span class="comparison-toggle-stats">
+        {{ comp.repos | length }} repos &middot; {{ total_commits }} commits
+        {% if total_prs %} &middot; {{ total_prs }} PRs{% endif %}
+        {% if total_jira %} &middot; {{ total_jira }} JIRA tickets{% endif %}
+      </span>
+    </div>
+    <span class="comp-chevron">&#x276F;</span>
+  </div>
+  <div class="comparison-body">
+    {% for repo_name, repo_data in comp.repos.items() | sort %}
+    <div class="repo-change">
+      <div class="repo-change-header" onclick="this.parentElement.classList.toggle('rc-open')">
+        <div class="repo-change-name">
+          <a href="{{ repo_data.compare_url }}" target="_blank" rel="noopener">{{ repo_name }}</a>
+          <span class="sha-range">{{ repo_data.old_commit[:8] }} &rarr; {{ repo_data.new_commit[:8] }}</span>
+        </div>
+        <div class="repo-change-stats">
+          <span class="stat-badge stat-commits">{{ repo_data.commit_count }} commits</span>
+          {% if repo_data.pull_requests %}
+          <span class="stat-badge stat-prs">{{ repo_data.pull_requests | length }} PRs</span>
+          {% endif %}
+          {% if repo_data.jira_tickets %}
+          <span class="stat-badge stat-jira">{{ repo_data.jira_tickets | length }} JIRA</span>
+          {% endif %}
+          <span class="rc-chevron">&#x276F;</span>
+        </div>
+      </div>
+      <div class="repo-change-body">
+        {% if repo_data.pull_requests %}
+        <div class="rc-sub-heading">Pull Requests</div>
+        <ul class="rc-list">
+          {% for pr in repo_data.pull_requests %}
+          <li>
+            <a class="rc-pr-num" href="{{ pr.url }}" target="_blank" rel="noopener">#{{ pr.number }}</a>
+            <span class="rc-pr-title">{{ pr.title }}</span>
+            {% if pr.merged_at %}<span class="rc-pr-merged">merged</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if repo_data.jira_tickets %}
+        <div class="rc-sub-heading">JIRA Tickets</div>
+        <ul class="rc-list">
+          {% for ticket in repo_data.jira_tickets %}
+          <li>
+            <a class="jira-key" href="{{ ticket.url }}" target="_blank" rel="noopener">{{ ticket.key }}</a>
+            <span class="jira-summary">{{ ticket.summary }}</span>
+            {% set st = ticket.status | lower %}
+            {% if 'done' in st or 'closed' in st or 'resolved' in st %}
+            <span class="jira-status jira-status-done">{{ ticket.status }}</span>
+            {% elif 'progress' in st or 'review' in st %}
+            <span class="jira-status jira-status-progress">{{ ticket.status }}</span>
+            {% else %}
+            <span class="jira-status jira-status-other">{{ ticket.status }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        <div class="rc-sub-heading">Commits</div>
+        <ul class="rc-list">
+          {% for commit in repo_data.commits %}
+          <li>
+            <a class="rc-sha" href="{{ commit.url }}" target="_blank" rel="noopener">{{ commit.sha[:8] }}</a>
+            <span class="rc-msg">{{ commit.message.split('\n')[0] }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endmacro %}
 
 <header class="header">
   <div class="header-inner">
@@ -684,6 +940,7 @@
         {% else %}
           <div class="no-notes">No structured release notes available yet.</div>
         {% endif %}
+        {{ render_comparison(comparisons.get(up.pr_number | string)) }}
       </div>
     </div>
     {% endfor %}
@@ -835,6 +1092,7 @@
       {% else %}
         <div class="no-notes">No structured release notes available for this upgrade.</div>
       {% endif %}
+      {{ render_comparison(comparisons.get(release.pr_number | string)) }}
     </div>
   </div>
   {% endfor %}

@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'generate.py'
+      - 'compare_images.py'
       - 'templates/**'
       - 'pyproject.toml'
       - '.github/workflows/update-dashboard.yml'
@@ -39,10 +40,38 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Restore comparisons cache
+        uses: actions/cache@v4
+        with:
+          path: data/comparisons.json
+          key: comparisons-cache
+          restore-keys: comparisons-cache
+
       - name: Generate dashboard
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: uv run python generate.py --limit 30 --output data/ -v
+
+      - name: Compare index images
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+        run: |
+          # Move cached comparisons into data/ so the script can read them
+          if [ -f data/comparisons.json ]; then
+            echo "Using cached comparisons from previous runs"
+          fi
+          uv run python compare_images.py --input data/releases.json --output data/comparisons.json --limit 5 -v
+        continue-on-error: true
+
+      - name: Re-render dashboard with comparisons
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f data/comparisons.json ]; then
+            uv run python generate.py --limit 30 --output data/ -v
+          fi
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -449,11 +449,25 @@ def scrape_releases(token: str | None, limit: int = 30) -> list[dict]:
     return releases
 
 
+def load_comparisons(output_dir: Path) -> dict:
+    """Load image comparison data if available."""
+    comp_file = output_dir / "comparisons.json"
+    if comp_file.exists():
+        try:
+            with open(comp_file) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            logger.warning("Could not load comparisons.json")
+    return {}
+
+
 def generate_dashboard(releases: list[dict], upcoming: list[dict], output_dir: Path):
     """Generate the static HTML dashboard from releases data."""
     template_dir = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(str(template_dir)), autoescape=True)
     template = env.get_template("index.html")
+
+    comparisons = load_comparisons(output_dir)
 
     latest_prod = next(
         (r for r in releases if r["environment"] == "production"),
@@ -481,6 +495,7 @@ def generate_dashboard(releases: list[dict], upcoming: list[dict], output_dir: P
         latest_prod=latest_prod,
         latest_dev=latest_dev,
         upcoming=upcoming,
+        comparisons=comparisons,
         last_updated=now,
         total_releases=len(releases),
     )
