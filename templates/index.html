@@ -577,6 +577,42 @@
       flex-shrink: 0;
     }
 
+    /* Collapsible sections */
+    .collapsible-section { margin: 8px 0; }
+    .collapsible-section summary {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 6px 0;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+    .collapsible-section summary::-webkit-details-marker { display: none; }
+    .collapsible-section summary::before {
+      content: '\25B6';
+      font-size: 9px;
+      transition: transform 0.2s ease;
+      display: inline-block;
+    }
+    .collapsible-section[open] summary::before {
+      transform: rotate(90deg);
+    }
+    .collapsible-section summary .count-badge {
+      font-size: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1px 7px;
+      color: var(--text);
+      font-weight: 600;
+    }
+
     /* Commit/PR/JIRA tables */
     .rc-sub-heading {
       font-size: 11px;
@@ -699,39 +735,39 @@
   <div class="repo-diff-inline">
     <div class="sha-range" style="margin-bottom:8px;">
       <a href="{{ repo_data.compare_url }}" target="_blank" rel="noopener">{{ repo_data.old_commit[:8] }} &rarr; {{ repo_data.new_commit[:8] }}</a>
-      <span class="stat-badge stat-commits" style="margin-left:8px;">{{ repo_data.commit_count }} commits</span>
-      {% if repo_data.jira_tickets %}
-      <span class="stat-badge stat-jira">{{ repo_data.jira_tickets | length }} JIRA</span>
-      {% endif %}
     </div>
     {% if repo_data.jira_tickets %}
-    <div class="rc-sub-heading">JIRA Tickets</div>
-    <ul class="rc-list">
-      {% for ticket in repo_data.jira_tickets %}
-      <li>
-        <a class="jira-key" href="{{ ticket.url }}" target="_blank" rel="noopener">{{ ticket.key }}</a>
-        <span class="jira-summary">{{ ticket.summary }}</span>
-        {% set st = ticket.status | lower %}
-        {% if 'done' in st or 'closed' in st or 'resolved' in st %}
-        <span class="jira-status jira-status-done">{{ ticket.status }}</span>
-        {% elif 'progress' in st or 'review' in st %}
-        <span class="jira-status jira-status-progress">{{ ticket.status }}</span>
-        {% else %}
-        <span class="jira-status jira-status-other">{{ ticket.status }}</span>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
+    <details class="collapsible-section">
+      <summary>JIRA Tickets <span class="count-badge">{{ repo_data.jira_tickets | length }}</span></summary>
+      <ul class="rc-list">
+        {% for ticket in repo_data.jira_tickets %}
+        <li>
+          <a class="jira-key" href="{{ ticket.url }}" target="_blank" rel="noopener">{{ ticket.key }}</a>
+          <span class="jira-summary">{{ ticket.summary }}</span>
+          {% set st = ticket.status | lower %}
+          {% if 'done' in st or 'closed' in st or 'resolved' in st %}
+          <span class="jira-status jira-status-done">{{ ticket.status }}</span>
+          {% elif 'progress' in st or 'review' in st %}
+          <span class="jira-status jira-status-progress">{{ ticket.status }}</span>
+          {% else %}
+          <span class="jira-status jira-status-other">{{ ticket.status }}</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
     {% endif %}
-    <div class="rc-sub-heading">Commits</div>
-    <ul class="rc-list">
-      {% for commit in repo_data.commits %}
-      <li>
-        <a class="rc-sha" href="{{ commit.url }}" target="_blank" rel="noopener">{{ commit.sha[:8] }}</a>
-        <span class="rc-msg">{{ commit.message.split('\n')[0] }}</span>
-      </li>
-      {% endfor %}
-    </ul>
+    <details class="collapsible-section">
+      <summary>Commits <span class="count-badge">{{ repo_data.commit_count }}</span></summary>
+      <ul class="rc-list">
+        {% for commit in repo_data.commits %}
+        <li>
+          <a class="rc-sha" href="{{ commit.url }}" target="_blank" rel="noopener">{{ commit.sha[:8] }}</a>
+          <span class="rc-msg">{{ commit.message.split('\n')[0] }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
   </div>
 {% endif %}
 {% endmacro %}
@@ -765,30 +801,33 @@
   </div>
   <div class="comp-body">
     {% if comp.subsections_html %}
-      {% for sub_name, sub_html in comp.subsections_html.items() %}
-      <div class="subsection">
-        <div class="subsection-header">
-          {% set sub_lower = sub_name | lower %}
-          {% if 'breaking' in sub_lower %}
-          <div class="subsection-icon breaking">!</div>
-          <div class="subsection-title breaking">{{ sub_name }}</div>
-          {% elif 'feature' in sub_lower or 'new' in sub_lower %}
-          <div class="subsection-icon features">+</div>
-          <div class="subsection-title features">{{ sub_name }}</div>
-          {% elif 'fix' in sub_lower or 'bug' in sub_lower %}
-          <div class="subsection-icon bugfix">&#x2714;</div>
-          <div class="subsection-title bugfix">{{ sub_name }}</div>
-          {% elif 'doc' in sub_lower %}
-          <div class="subsection-icon docs">&#x270E;</div>
-          <div class="subsection-title docs">{{ sub_name }}</div>
-          {% else %}
-          <div class="subsection-icon other">&#x2022;</div>
-          <div class="subsection-title other">{{ sub_name }}</div>
-          {% endif %}
+      <details class="collapsible-section" open>
+        <summary>Release Notes <span class="count-badge">{{ comp.subsections_html | length }} sections</span></summary>
+        {% for sub_name, sub_html in comp.subsections_html.items() %}
+        <div class="subsection">
+          <div class="subsection-header">
+            {% set sub_lower = sub_name | lower %}
+            {% if 'breaking' in sub_lower %}
+            <div class="subsection-icon breaking">!</div>
+            <div class="subsection-title breaking">{{ sub_name }}</div>
+            {% elif 'feature' in sub_lower or 'new' in sub_lower %}
+            <div class="subsection-icon features">+</div>
+            <div class="subsection-title features">{{ sub_name }}</div>
+            {% elif 'fix' in sub_lower or 'bug' in sub_lower %}
+            <div class="subsection-icon bugfix">&#x2714;</div>
+            <div class="subsection-title bugfix">{{ sub_name }}</div>
+            {% elif 'doc' in sub_lower %}
+            <div class="subsection-icon docs">&#x270E;</div>
+            <div class="subsection-title docs">{{ sub_name }}</div>
+            {% else %}
+            <div class="subsection-icon other">&#x2022;</div>
+            <div class="subsection-title other">{{ sub_name }}</div>
+            {% endif %}
+          </div>
+          <div class="md-content">{{ sub_html | safe }}</div>
         </div>
-        <div class="md-content">{{ sub_html | safe }}</div>
-      </div>
-      {% endfor %}
+        {% endfor %}
+      </details>
     {% elif comp.raw_html %}
       <div class="md-content">{{ comp.raw_html | safe }}</div>
     {% else %}
