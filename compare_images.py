@@ -57,6 +57,7 @@ JIRA_PATTERN = re.compile(r"\b(SRVKP-\d+)\b")
 SKIP_COMMIT_PATTERNS = [
     re.compile(r"(?i)\bCVE-\d{4}-\d+\b"),              # CVE fixes
     re.compile(r"(?i)^Bump\s+"),                         # dependency bumps
+    re.compile(r"(?i)^build\(deps\)"),                     # build(deps): bump ...
     re.compile(r"(?i)^Update\s+dependency\b"),            # dependency updates
     re.compile(r"(?i)\bdependabot\b"),                    # dependabot commits
     re.compile(r"(?i)\brenovate\b"),                      # renovate bot
@@ -189,7 +190,10 @@ REPO_TO_JIRA_COMPONENT = {
 
 
 def search_jira_by_date_range(component, date_from, date_to, jira_token, jira_email, jira_url=DEFAULT_JIRA_URL):
-    """Search JIRA for tickets resolved between two dates for a given component.
+    """Search JIRA for tickets that moved out of Code Review during the commit date range.
+
+    This captures tickets whose PRs were merged (transitioning from Code Review
+    to QA, Release Pending, Closed, etc.) between the two commit dates.
 
     Returns a list of JIRA ticket dicts.
     """
@@ -204,8 +208,9 @@ def search_jira_by_date_range(component, date_from, date_to, jira_token, jira_em
 
     jql = (
         f'project = SRVKP AND component = "{component}" '
-        f'AND resolved >= "{date_from}" AND resolved <= "{date_to}" '
-        f'ORDER BY resolved DESC'
+        f'AND status CHANGED FROM "Code Review" TO ("QA", "Release Pending", "Closed", "Done", "Resolved") '
+        f'DURING ("{date_from}", "{date_to}") '
+        f'ORDER BY updated DESC'
     )
     logger.debug(f"JIRA date range query: {jql}")
 
