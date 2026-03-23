@@ -93,13 +93,36 @@ def github_api(endpoint, token=None, accept=None):
 
 
 def get_version_for_commit(repo, sha, token):
-    """Find the version tag associated with a commit SHA."""
+    """Find the version tag associated with or nearest before a commit SHA.
+
+    First checks for an exact tag match on the commit. If none found,
+    finds the most recent tag that is an ancestor of the commit by using
+    the compare API.
+    """
     tags_data = github_api(f"repos/{repo}/tags?per_page=30", token=token)
-    if tags_data:
-        for tag in tags_data:
-            if tag.get("commit", {}).get("sha", "").startswith(sha[:12]):
-                tag_name = tag.get("name", "")
-                return tag_name.lstrip("v") if tag_name else None
+    if not tags_data:
+        return None
+
+    # 1) Exact match: commit is tagged directly
+    for tag in tags_data:
+        if tag.get("commit", {}).get("sha", "").startswith(sha[:12]):
+            tag_name = tag.get("name", "")
+            return tag_name.lstrip("v") if tag_name else None
+
+    # 2) Find the latest tag that is an ancestor of this commit
+    #    Check only the first few version tags to limit API calls
+    checked = 0
+    for tag in tags_data:
+        tag_name = tag.get("name", "")
+        if not re.match(r"^v?\d+\.\d+", tag_name):
+            continue
+        compare = github_api(f"repos/{repo}/compare/{tag_name}...{sha[:12]}", token=token)
+        if compare and compare.get("status") in ("ahead", "identical"):
+            return tag_name.lstrip("v") if tag_name else None
+        checked += 1
+        if checked >= 3:
+            break
+
     return None
 
 
