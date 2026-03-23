@@ -399,6 +399,17 @@
       font-size: 13px; font-weight: 800; flex-shrink: 0;
       letter-spacing: -0.5px;
     }
+    .comp-ver-pill {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--green);
+      background: rgba(52,211,153,0.12);
+      border: 1px solid rgba(52,211,153,0.2);
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-family: 'SF Mono','Fira Code', monospace;
+      margin-left: 2px;
+    }
     .comp-sub-count {
       font-size: 12px;
       color: var(--text-dim);
@@ -845,15 +856,6 @@
 {% macro render_repo_diff(repo_data) %}
 {% if repo_data %}
   <div class="repo-diff-inline">
-    {% if repo_data.new_version %}
-    <div class="comp-version-badge">
-      {% if repo_data.old_version %}
-      <span class="ver-old">{{ repo_data.old_version }}</span>
-      <span class="ver-arrow">&rarr;</span>
-      {% endif %}
-      <span class="ver-new">{{ repo_data.new_version }}</span>
-    </div>
-    {% endif %}
     <div class="sha-range" style="margin-bottom:8px;">
       <a href="{{ repo_data.compare_url }}" target="_blank" rel="noopener">{{ repo_data.old_commit[:8] }} &rarr; {{ repo_data.new_commit[:8] }}</a>
     </div>
@@ -909,11 +911,16 @@
 
 {# Render component section with release notes + comparison data #}
 {% macro render_component(comp, comparison, idx) %}
+{% set repo_key = match_repo(comp.name, comparison) | trim %}
+{% set repo = comparison.repos[repo_key] if repo_key and comparison and comparison.repos and repo_key in comparison.repos else None %}
 <div class="component-section comp-expanded">
   <div class="component-header-inner" onclick="this.parentElement.classList.toggle('comp-expanded')">
     <div class="comp-name">
       <div class="comp-icon c{{ idx % 8 }}">{{ comp.name[:2] | upper }}</div>
       <span>{{ comp.name }}</span>
+      {% if repo and repo.new_version %}
+      <span class="comp-ver-pill">{{ repo.new_version }}</span>
+      {% endif %}
       {% if comp.subsections %}
       <span class="comp-sub-count">{{ comp.subsections | length }} sections</span>
       {% endif %}
@@ -955,9 +962,8 @@
       <div class="md-content"><p style="color:var(--text-dim)">No details available.</p></div>
     {% endif %}
     {# Inject comparison data for this component #}
-    {% set repo_key = match_repo(comp.name, comparison) | trim %}
-    {% if repo_key and comparison and comparison.repos and repo_key in comparison.repos %}
-      {{ render_repo_diff(comparison.repos[repo_key]) }}
+    {% if repo %}
+      {{ render_repo_diff(repo) }}
     {% endif %}
   </div>
 </div>
