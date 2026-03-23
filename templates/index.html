@@ -785,6 +785,22 @@
       padding-top: 12px;
       border-top: 1px solid rgba(255,255,255,0.06);
     }
+    .comp-version-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 10px;
+      padding: 5px 14px;
+      background: linear-gradient(135deg, rgba(52,211,153,0.1), rgba(16,185,129,0.06));
+      border: 1px solid rgba(52,211,153,0.2);
+      border-radius: 8px;
+      font-family: 'SF Mono','Fira Code', monospace;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .ver-old { color: var(--text-dim); }
+    .ver-arrow { color: var(--text-dim); font-size: 12px; }
+    .ver-new { color: var(--green); }
 
     /* Footer */
     .footer {
@@ -829,6 +845,15 @@
 {% macro render_repo_diff(repo_data) %}
 {% if repo_data %}
   <div class="repo-diff-inline">
+    {% if repo_data.new_version %}
+    <div class="comp-version-badge">
+      {% if repo_data.old_version %}
+      <span class="ver-old">{{ repo_data.old_version }}</span>
+      <span class="ver-arrow">&rarr;</span>
+      {% endif %}
+      <span class="ver-new">{{ repo_data.new_version }}</span>
+    </div>
+    {% endif %}
     <div class="sha-range" style="margin-bottom:8px;">
       <a href="{{ repo_data.compare_url }}" target="_blank" rel="noopener">{{ repo_data.old_commit[:8] }} &rarr; {{ repo_data.new_commit[:8] }}</a>
     </div>

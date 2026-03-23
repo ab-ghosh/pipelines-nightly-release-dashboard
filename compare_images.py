@@ -92,6 +92,17 @@ def github_api(endpoint, token=None, accept=None):
         return None
 
 
+def get_version_for_commit(repo, sha, token):
+    """Find the version tag associated with a commit SHA."""
+    tags_data = github_api(f"repos/{repo}/tags?per_page=30", token=token)
+    if tags_data:
+        for tag in tags_data:
+            if tag.get("commit", {}).get("sha", "").startswith(sha[:12]):
+                tag_name = tag.get("name", "")
+                return tag_name.lstrip("v") if tag_name else None
+    return None
+
+
 def get_compare(repo, old_sha, new_sha, token):
     """Get commits between two SHAs via GitHub Compare API."""
     data = github_api(f"repos/{repo}/compare/{old_sha}...{new_sha}", token=token)
@@ -574,9 +585,17 @@ def compare_index_images(old_image, new_image, github_token, jira_token, jira_em
                 if new_count:
                     logger.info(f"  Found {new_count} additional JIRA tickets via date range search")
 
+        # Try to find version tags for the commits
+        old_version = get_version_for_commit(git_repo, old_commit, github_token)
+        new_version = get_version_for_commit(git_repo, new_commit, github_token)
+        if new_version:
+            logger.info(f"  Version: {old_version or '?'} -> {new_version}")
+
         changes[git_repo] = {
             "old_commit": old_commit,
             "new_commit": new_commit,
+            "old_version": old_version,
+            "new_version": new_version,
             "compare_url": f"https://github.com/{git_repo}/compare/{old_commit[:12]}...{new_commit[:12]}",
             "commits": commits,
             "commit_count": len(commits),
