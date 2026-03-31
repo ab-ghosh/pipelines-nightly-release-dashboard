@@ -272,6 +272,8 @@ def parse_release_notes(body: str) -> dict:
         return {"raw": "", "components": []}
 
     notes_text = body[notes_start:].strip()
+    # Dedent lines: some PR bodies indent markdown headers with spaces
+    notes_text = re.sub(r"(?m)^[ \t]+(?=[#\-\*])", "", notes_text)
     notes_text = _normalize_bold_headers(notes_text)
 
     components = []
