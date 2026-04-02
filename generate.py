@@ -122,7 +122,7 @@ def search_upgrade_prs(token: str | None, limit: int = 30, state: str = "merged"
     is_filter = f"is:{state}" if state == "open" else "is:merged"
 
     for query in SEARCH_QUERIES:
-        search_q = f'repo:{INFRA_REPO} is:pr {is_filter} "{query}"'
+        search_q = f'repo:{INFRA_REPO} is:pr {is_filter} draft:false "{query}"'
         logger.info(f"Searching ({state}): {query}")
         try:
             results = github_api(
@@ -344,6 +344,8 @@ def list_open_upgrade_prs(token: str | None, limit: int = 10) -> list[dict]:
 
     matched = []
     for pr in prs:
+        if pr.get("draft", False):
+            continue
         title_lower = pr.get("title", "").lower()
         if any(term in title_lower for term in query_terms):
             matched.append(pr)
