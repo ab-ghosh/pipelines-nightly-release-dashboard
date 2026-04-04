@@ -216,19 +216,34 @@ def extract_promoted_from(body: str) -> int | None:
 
 
 def _normalize_bold_headers(text: str) -> str:
-    """Convert **bold** line headers to markdown ## / ### headers.
+    """Convert **bold** line headers to markdown headers at the right level.
 
     Some PRs use **Component Name** and **Features:** instead of
     ## Component Name and ### Features.  This normalises them so
     the main parser can handle both formats uniformly.
+
+    The levels are chosen based on existing markdown headers in the text
+    so that bold component headers match the existing component level and
+    bold subsection headers are one level deeper.
     """
+    # Detect the deepest existing header level to avoid collisions
+    existing_levels = {len(m.group(1)) for m in re.finditer(r"(?m)^(#{1,6})\s+", text)}
+    if existing_levels:
+        max_existing = max(existing_levels)
+        comp_prefix = "#" * max_existing
+        sub_prefix = "#" * (max_existing + 1)
+    else:
+        comp_prefix = "##"
+        sub_prefix = "###"
+
     lines = text.split("\n")
     out = []
     # Known subsection keywords (case-insensitive prefix match)
     sub_keywords = (
-        "features", "bug fix", "bugfix", "breaking", "deprecat",
-        "performance", "docs", "documentation", "other", "release",
-        "misc", "internal", "api change", "improvements", "enhancement",
+        "features", "new features", "bug fix", "bugfix", "bugs fixed",
+        "fixes", "breaking", "deprecat", "performance", "docs",
+        "documentation", "other", "release", "misc", "internal",
+        "api change", "improvements", "enhancement",
     )
     for line in lines:
         stripped = line.strip()
@@ -238,12 +253,101 @@ def _normalize_bold_headers(text: str) -> str:
             title = m.group(1).strip()
             title_lower = title.lower()
             if any(title_lower.startswith(kw) for kw in sub_keywords):
-                out.append(f"### {title}")
+                out.append(f"{sub_prefix} {title}")
             else:
-                out.append(f"## {title}")
+                out.append(f"{comp_prefix} {title}")
             continue
         out.append(line)
     return "\n".join(out)
+
+
+def _strip_trailing_non_release_content(text: str) -> str:
+    """Remove validation, testing, risk, and other non-release sections from the end.
+
+    Cuts at a ``---`` horizontal rule that precedes non-release content, or at
+    known non-release section headers.
+    """
+    # Non-release section names (case-insensitive prefix match)
+    non_release = (
+        "validation", "testing", "test details", "test plan",
+        "risk assessment", "risk", "evidence", "verification",
+        "how to test", "qa", "review", "checklist",
+    )
+
+    # Cut at --- followed by a non-release header
+    parts = re.split(r"(?m)^---+\s*$", text)
+    if len(parts) > 1:
+        # Keep only the parts before the first --- that is followed by non-release content
+        kept = [parts[0]]
+        for part in parts[1:]:
+            # Check if this part starts with a non-release header
+            first_header = re.search(r"(?m)^#{1,4}\s+(.+)$", part.strip())
+            if first_header:
+                header_text = first_header.group(1).strip().lower()
+                if any(header_text.startswith(kw) for kw in non_release):
+                    break
+            # Also check for **bold** style non-release headers
+            first_bold = re.search(r"(?m)^\*\*(.+?)\*\*", part.strip())
+            if first_bold:
+                bold_text = first_bold.group(1).strip().lower().rstrip(":")
+                if any(bold_text.startswith(kw) for kw in non_release):
+                    break
+            kept.append(part)
+        text = "\n---\n".join(kept)
+
+    # Also remove any trailing non-release sections even without --- separator
+    lines = text.split("\n")
+    cut_at = len(lines)
+    for i, line in enumerate(lines):
+        header_m = re.match(r"^#{1,4}\s+(.+)$", line.strip())
+        if header_m:
+            header_text = header_m.group(1).strip().lower()
+            if any(header_text.startswith(kw) for kw in non_release):
+                cut_at = i
+                break
+    text = "\n".join(lines[:cut_at]).rstrip()
+
+    return text
+
+
+def _detect_header_levels(text: str) -> tuple[int, int]:
+    """Detect the markdown header levels used for components and subsections.
+
+    Returns (component_level, subsection_level).
+    Some PRs use ## for components and ### for subsections,
+    others use ### for components and #### for subsections.
+    """
+    # Known component name patterns
+    component_keywords = (
+        "tekton", "pipeline", "pac", "operator", "results",
+        "chains", "triggers", "hub", "cli", "manual approval gate",
+    )
+    # Known subsection patterns
+    sub_keywords = (
+        "features", "new features", "bug fix", "bugfix", "bugs fixed",
+        "fixes", "breaking", "deprecat", "performance", "docs",
+        "documentation", "other", "release", "misc", "internal",
+        "api change", "improvements", "enhancement",
+    )
+
+    # Scan all headers and classify them
+    for level in (2, 3):
+        pattern = re.compile(rf"^{'#' * level}\s+(.+)$", re.MULTILINE)
+        matches = pattern.findall(text)
+        for m in matches:
+            name_lower = m.strip().lower()
+            if any(kw in name_lower for kw in component_keywords):
+                return level, level + 1
+
+    # Fallback: use the two most common header levels
+    header_levels = [len(m.group(1)) for m in re.finditer(r"(?m)^(#{1,6})\s+", text)]
+    if header_levels:
+        unique = sorted(set(header_levels))
+        if len(unique) >= 2:
+            return unique[0], unique[1]
+        return unique[0], unique[0] + 1
+
+    return 2, 3
 
 
 def parse_release_notes(body: str) -> dict:
@@ -252,18 +356,25 @@ def parse_release_notes(body: str) -> dict:
         return {"raw": "", "components": []}
 
     notes_start = None
-    for marker in ["Release Notes generated by Gemini:", "Release Notes:", "## "]:
-        idx = body.find(marker)
-        if idx != -1:
-            if marker == "## ":
-                notes_start = idx
-            else:
-                notes_start = idx + len(marker)
+
+    # Try explicit "Release Notes" markers first (case-insensitive)
+    for marker_re in [
+        r"Release Notes generated by Gemini:",
+        r"(?i)release\s+notes\s*:",
+    ]:
+        m = re.search(marker_re, body)
+        if m:
+            notes_start = m.end()
             break
+
+    # Try markdown headers: # or ##
+    if notes_start is None:
+        m = re.search(r"(?m)^#{1,2}\s+", body)
+        if m:
+            notes_start = m.start()
 
     # If no markdown headers found, try bold-style headers
     if notes_start is None:
-        # Look for the first **bold** line that could be a component header
         m = re.search(r"(?m)^\*\*.+\*\*\s*$", body)
         if m:
             notes_start = m.start()
@@ -276,19 +387,35 @@ def parse_release_notes(body: str) -> dict:
     notes_text = re.sub(r"(?m)^[ \t]+(?=[#\-\*])", "", notes_text)
     notes_text = _normalize_bold_headers(notes_text)
 
+    # Strip non-release content (Validation, Testing, Risk Assessment, etc.)
+    notes_text = _strip_trailing_non_release_content(notes_text)
+
+    # Detect what header levels are used for components vs subsections
+    comp_level, sub_level = _detect_header_levels(notes_text)
+    comp_prefix = "#" * comp_level
+    sub_prefix = "#" * sub_level
+
     components = []
-    sections = re.split(r"(?=^## )", notes_text, flags=re.MULTILINE)
+    sections = re.split(rf"(?=^{comp_prefix}\s)", notes_text, flags=re.MULTILINE)
 
     for section in sections:
         section = section.strip()
         if not section:
             continue
 
-        header_match = re.match(r"^##\s+(.+)$", section, re.MULTILINE)
+        header_match = re.match(rf"^{comp_prefix}\s+(.+)$", section, re.MULTILINE)
         if not header_match:
             continue
 
         component_name = header_match.group(1).strip()
+
+        # Skip the release-notes title header itself (e.g. "OpenShift Pipelines 5.0.5-806")
+        if re.match(r"(?i)(release\s+notes|openshift\s+pipelines)", component_name):
+            continue
+
+        # Clean up component names that embed "release notes" (e.g. "PAC release notes")
+        component_name = re.sub(r"(?i)\s*release\s+notes\s*$", "", component_name).strip()
+
         component_body = section[header_match.end():].strip()
 
         subsections = {}
@@ -296,7 +423,7 @@ def parse_release_notes(body: str) -> dict:
         current_lines = []
 
         for line in component_body.split("\n"):
-            sub_match = re.match(r"^###\s+(.+)$", line)
+            sub_match = re.match(rf"^{sub_prefix}\s+(.+)$", line)
             if sub_match:
                 if current_sub and current_lines:
                     subsections[current_sub] = "\n".join(current_lines).strip()
